@@ -1,5 +1,4 @@
 import type { QuestionStatus, TopicStatus } from "@/types";
-import { generateAuthCode } from "@/lib/auth";
 
 export const MAX_GROUP_MEMBERS = 5;
 
@@ -9,10 +8,6 @@ export function isGroupFull(memberCount: number): boolean {
 
 export const JOIN_CODE_TTL_MINUTES = 15;
 export const JOIN_CODE_TTL_MS = JOIN_CODE_TTL_MINUTES * 60 * 1000;
-
-export function generateJoinCode(): string {
-  return generateAuthCode();
-}
 
 export function normalizeJoinCode(code: string): string {
   return code.trim().replace(/\D/g, "");

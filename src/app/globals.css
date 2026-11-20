@@ -480,6 +480,12 @@ body {
 }
 
 @layer utilities {
+  /* Skip layout/paint for rows far off screen; the browser remembers each row's real height once seen. */
+  .cv-auto {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 64px;
+  }
+
   .scrollbar-thin {
     scrollbar-width: thin;
     scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);

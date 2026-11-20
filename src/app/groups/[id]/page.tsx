@@ -17,11 +17,16 @@ import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
 import { GroupDetailSkeleton, ErrorState } from "@/components/ui/StateViews";
 import InviteCodeBlock from "@/components/groups/InviteCodeBlock";
-import GroupMomentumPanel from "@/components/groups/GroupMomentumPanel";
+import dynamic from "next/dynamic";
 import GroupGamificationPanel from "@/components/groups/GroupGamificationPanel";
 import { useGroupHeaderActions } from "@/components/groups/GroupShell";
 import QuestionListView from "@/components/questions/QuestionListView";
 import QuestionTableSearch from "@/components/questions/QuestionTableSearch";
+// Below the fold and data-heavy: fetched after the page shell paints. Fixed height avoids layout shift.
+const GroupMomentumPanel = dynamic(() => import("@/components/groups/GroupMomentumPanel"), {
+  ssr: false,
+  loading: () => <div className="min-h-[240px] animate-pulse rounded-2xl bg-[var(--surface-muted)]" aria-hidden />,
+});
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import TablePagination from "@/components/ui/TablePagination";
 import {

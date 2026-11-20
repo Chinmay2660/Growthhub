@@ -69,13 +69,13 @@ const notifyOutbox = () => {
 };
 
 export async function pendingWriteCount(): Promise<number> {
-  const d = getLocalDb();
+  const d = await getLocalDb();
   if (!d || !localUserId) return 0;
   return d.outbox.where("userId").equals(localUserId).count().catch(() => 0);
 }
 
 async function readCache<T>(url: string): Promise<T | undefined> {
-  const d = getLocalDb();
+  const d = await getLocalDb();
   if (!d || !localUserId || !isCacheable(url)) return undefined;
   try {
     const row = await d.responses.get(`${localUserId}|${url}`);
@@ -86,7 +86,7 @@ async function readCache<T>(url: string): Promise<T | undefined> {
 }
 
 async function writeCache(url: string, data: unknown) {
-  const d = getLocalDb();
+  const d = await getLocalDb();
   if (!d || !localUserId || !isCacheable(url)) return;
   try {
     await d.responses.put({
@@ -102,7 +102,7 @@ async function writeCache(url: string, data: unknown) {
 }
 
 async function clearCache() {
-  const d = getLocalDb();
+  const d = await getLocalDb();
   if (!d || !localUserId) return;
   await d.responses.where("userId").equals(localUserId).delete().catch(() => {});
 }
@@ -148,7 +148,7 @@ const newTempId = () =>
 
 /** Patch (or remove, when patch is null) every cached object with this _id so offline edits show up. */
 async function applyOptimistic(id: string | undefined, patch: Record<string, unknown> | null) {
-  const d = getLocalDb();
+  const d = await getLocalDb();
   if (!d || !localUserId || !id) return;
 
   const touch = (node: unknown): { value: unknown; changed: boolean } => {
@@ -220,7 +220,7 @@ async function send<T>(method: Method, url: string, payload: unknown, idempotenc
 }
 
 async function enqueue<T>(method: Method, url: string, payload: unknown, key: string): Promise<T> {
-  const d = getLocalDb()!;
+  const d = (await getLocalDb())!;
   const tempId = method === "POST" ? newTempId() : undefined;
   await d.outbox.add({
     userId: localUserId!,
@@ -246,7 +246,7 @@ async function enqueue<T>(method: Method, url: string, payload: unknown, key: st
 
 async function write<T>(method: Method, url: string, payload?: unknown): Promise<T> {
   const key = newId();
-  const canQueue = matches(QUEUEABLE, url) && !!localUserId && !!getLocalDb();
+  const canQueue = matches(QUEUEABLE, url) && !!localUserId && !!(await getLocalDb());
   const offline = typeof navigator !== "undefined" && navigator.onLine === false;
 
   if (canQueue && offline) return enqueue<T>(method, url, payload, key);
@@ -266,7 +266,7 @@ let flushing = false;
 
 /** Replays queued writes in order. Stops at the first network/5xx failure; drops items the server rejects. */
 export async function flushOutbox(): Promise<{ sent: number; dropped: number }> {
-  const d = getLocalDb();
+  const d = await getLocalDb();
   const result = { sent: 0, dropped: 0 };
   if (!d || !localUserId || flushing) return result;
   if (typeof navigator !== "undefined" && navigator.onLine === false) return result;
@@ -320,7 +320,7 @@ export async function flushOutbox(): Promise<{ sent: number; dropped: number }> 
 
 /** Wipe all local data (logout, or a different user signing in on this browser). */
 export async function resetLocalData(): Promise<void> {
-  const d = getLocalDb();
+  const d = await getLocalDb();
   localUserId = null;
   if (!d) return;
   await Promise.all([d.responses.clear(), d.outbox.clear()]).catch(() => {});

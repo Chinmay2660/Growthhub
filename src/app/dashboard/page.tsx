@@ -12,7 +12,9 @@ import {
   type QuestionPointBurst,
 } from "@/lib/question-points-burst";
 import InspirationCard from "@/components/dashboard/InspirationCard";
-import NotesInbox from "@/components/groups/NotesInbox";
+import dynamic from "next/dynamic";
+
+const NotesInbox = dynamic(() => import("@/components/groups/NotesInbox"), { ssr: false });
 import TodayPlanCard from "@/components/dashboard/TodayPlanCard";
 import Card, { CardHeader } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";

@@ -1,6 +1,7 @@
 import { connectToDatabase } from "@/lib/mongodb";
 import { requireAuthUserId, unauthorized } from "@/lib/api-auth";
-import { joinCodeExpiryDate, jsonOk, jsonError, generateJoinCode } from "@/lib/utils";
+import { joinCodeExpiryDate, jsonOk, jsonError } from "@/lib/utils";
+import { generateJoinCode } from "@/lib/auth";
 import { serializeDoc, seedGroupSubjects } from "@/lib/services";
 import Group from "@/models/Group";
 import User from "@/models/User";

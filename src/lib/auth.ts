@@ -6,6 +6,11 @@ export function generateAuthCode(): string {
   return String(randomInt(100000, 1000000));
 }
 
+/** Server-only (node crypto). Kept out of utils.ts so client bundles do not pull in crypto polyfills. */
+export function generateJoinCode(): string {
+  return generateAuthCode();
+}
+
 export function normalizeUsername(username: string): string {
   return username.trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
 }

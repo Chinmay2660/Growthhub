@@ -26,7 +26,7 @@ function TaskRow({ task, updating, deleting, onToggle, onDelete }: TaskRowProps)
   return (
     <div
       className={clsx(
-        "group -mx-2 flex items-start gap-3 rounded-lg px-2 py-3 transition-colors hover:bg-[var(--surface-muted)]",
+        "cv-auto group -mx-2 flex items-start gap-3 rounded-lg px-2 py-3 transition-colors hover:bg-[var(--surface-muted)]",
         (updating || deleting) && "opacity-60"
       )}
     >

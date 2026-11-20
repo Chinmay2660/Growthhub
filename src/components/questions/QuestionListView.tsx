@@ -5,7 +5,9 @@ import clsx from "clsx";
 import { ChevronDown, ChevronUp, ExternalLink, Eye } from "lucide-react";
 import Button from "@/components/ui/Button";
 import { LoadingOverlay, QuestionRowsSkeleton } from "@/components/ui/StateViews";
-import QuestionPreviewModal from "@/components/questions/QuestionPreviewModal";
+import dynamic from "next/dynamic";
+
+const QuestionPreviewModal = dynamic(() => import("@/components/questions/QuestionPreviewModal"), { ssr: false });
 import QuestionPointsBurst from "@/components/questions/QuestionPointsBurst";
 import QuestionScopeChip from "@/components/questions/QuestionScopeChip";
 import QuestionStatusSelect from "@/components/questions/QuestionStatusSelect";
@@ -373,12 +375,14 @@ export default function QuestionListView({
         </div>
       </div>
 
-      <QuestionPreviewModal
-        open={preview !== null}
-        onClose={() => setPreview(null)}
-        content={preview?.content ?? ""}
-        link={preview?.link}
-      />
+      {preview && (
+        <QuestionPreviewModal
+          open
+          onClose={() => setPreview(null)}
+          content={preview.content}
+          link={preview.link}
+        />
+      )}
     </>
   );
 }
