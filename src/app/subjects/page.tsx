@@ -53,7 +53,12 @@ export default function SubjectsPage() {
           : `/api/subjects?scope=personal&includeInactive=1`;
       if (tab === "group" && user?.activeGroupId) {
         const [data, groupHeader] = await Promise.all([
-          apiGet<SubjectWithStats[]>(url),
+          apiGet<SubjectWithStats[]>(url, {
+            onCached: (c) => {
+              setSubjects(c);
+              setInitialLoad(false);
+            },
+          }),
           apiGet<{ myRole: GroupRole | null }>(
             `/api/groups/${user.activeGroupId}?view=header`
           ),
@@ -61,7 +66,12 @@ export default function SubjectsPage() {
         setSubjects(data);
         setCanManageGroupTracks(canManageGroup(groupHeader.myRole));
       } else {
-        const data = await apiGet<SubjectWithStats[]>(url);
+        const data = await apiGet<SubjectWithStats[]>(url, {
+          onCached: (c) => {
+            setSubjects(c);
+            setInitialLoad(false);
+          },
+        });
         setSubjects(data);
         setCanManageGroupTracks(false);
       }

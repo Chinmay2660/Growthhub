@@ -44,8 +44,13 @@ function TopicsContent() {
       if (subjectFilter) topicUrl += `&subjectId=${subjectFilter}`;
 
       const [topicData, subjectData] = await Promise.all([
-        apiGet<TopicWithProgress[]>(topicUrl),
-        apiGet<Subject[]>(subjectUrl),
+        apiGet<TopicWithProgress[]>(topicUrl, {
+          onCached: (c) => {
+            setTopics(c);
+            setLoading(false);
+          },
+        }),
+        apiGet<Subject[]>(subjectUrl, { onCached: setSubjects }),
       ]);
       setTopics(topicData);
       setSubjects(subjectData);

@@ -175,7 +175,7 @@ export default function SettingsPage() {
       });
       if (!ok) return;
     }
-    await logout();
+    if (!(await logout())) return;
     router.push("/login");
   };
 

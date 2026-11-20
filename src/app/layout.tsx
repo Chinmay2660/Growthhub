@@ -26,7 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={jakarta.variable} suppressHydrationWarning>
       <body
         suppressHydrationWarning
-        className="min-h-screen bg-[var(--background)] font-sans antialiased text-[var(--foreground)]"
+        className="min-h-dvh bg-[var(--background)] font-sans antialiased text-[var(--foreground)]"
       >
         <Script id="growthhub-theme-init" strategy="beforeInteractive">
           {themeScript}

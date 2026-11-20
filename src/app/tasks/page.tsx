@@ -46,10 +46,23 @@ export default function TasksPage() {
     try {
       const [active, completed] = await Promise.all([
         apiGet<PagedTasks>(
-          `/api/tasks?groupId=${activeGroupId}&bucket=active&page=${pendingPage}&limit=${TABLE_PAGE_SIZE}`
+          `/api/tasks?groupId=${activeGroupId}&bucket=active&page=${pendingPage}&limit=${TABLE_PAGE_SIZE}`,
+          {
+            onCached: (c) => {
+              setPendingTasks(c.items);
+              setPendingTotal(c.activeTotal);
+              setLoading(false);
+            },
+          }
         ),
         apiGet<PagedTasks>(
-          `/api/tasks?groupId=${activeGroupId}&bucket=completed&page=${completedPage}&limit=${TABLE_PAGE_SIZE}`
+          `/api/tasks?groupId=${activeGroupId}&bucket=completed&page=${completedPage}&limit=${TABLE_PAGE_SIZE}`,
+          {
+            onCached: (c) => {
+              setCompletedTasks(c.items);
+              setCompletedTotal(c.completedTotal);
+            },
+          }
         ),
       ]);
       setPendingTasks(active.items);

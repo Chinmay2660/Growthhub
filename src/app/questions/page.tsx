@@ -152,7 +152,7 @@ export default function QuestionsPage() {
     if (!activeGroupId) return;
     try {
       const [subjectData, groupHeader] = await Promise.all([
-        apiGet<Subject[]>(`/api/subjects?groupId=${activeGroupId}&minimal=1`),
+        apiGet<Subject[]>(`/api/subjects?groupId=${activeGroupId}&minimal=1`, { onCached: setSubjects }),
         apiGet<{ myRole: GroupRole | null }>(`/api/groups/${activeGroupId}?view=header`),
       ]);
       setSubjects(subjectData);
@@ -174,7 +174,13 @@ export default function QuestionsPage() {
         ? `&search=${encodeURIComponent(debouncedSearch.trim())}`
         : "";
       const questionUrl = `/api/practice-questions?groupId=${activeGroupId}&scope=${scopeFilter}${statusFilter.length ? `&status=${statusFilter.join(",")}` : ""}${subjectFilter.length ? `&subjectId=${subjectFilter.join(",")}` : ""}${dateFrom ? `&dateFrom=${dateFrom}` : ""}${dateTo ? `&dateTo=${dateTo}` : ""}&page=${page}&limit=${PAGE_SIZE}&period=${datePeriod}&sortBy=${sortBy}&sortDir=${sortDir}${searchQ}`;
-      const questionData = await apiGet<PagedQuestions>(questionUrl);
+      const questionData = await apiGet<PagedQuestions>(questionUrl, {
+        onCached: (c) => {
+          setQuestions(c.items);
+          setTotal(c.total);
+          setInitialLoad(false);
+        },
+      });
       setQuestions(questionData.items);
       setTotal(questionData.total);
     } catch (err) {
