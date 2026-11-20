@@ -210,7 +210,9 @@ export default function GroupMomentumPanel({ groupId }: { groupId: string }) {
 
   const load = useCallback(async () => {
     try {
-      setData(await apiGet<MomentumResponse>(`/api/group-dynamics?groupId=${groupId}`));
+      setData(
+        await apiGet<MomentumResponse>(`/api/group-dynamics?groupId=${groupId}`, { onCached: setData })
+      );
       setError(false);
     } catch {
       setError(true);

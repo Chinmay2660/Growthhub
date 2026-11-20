@@ -14,7 +14,17 @@ const nextConfig: NextConfig = {
     optimizePackageImports: ["d3", "lucide-react"],
   },
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    return [
+      { source: "/:path*", headers: securityHeaders },
+      // The worker script itself must never be cached by the browser or a CDN, or updates stall.
+      {
+        source: "/sw.js",
+        headers: [
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+          { key: "Service-Worker-Allowed", value: "/" },
+        ],
+      },
+    ];
   },
 };
 

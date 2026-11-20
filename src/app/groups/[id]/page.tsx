@@ -139,7 +139,14 @@ export default function GroupDetailPage() {
     if (!silent) setLoading(true);
     try {
       const data = await apiGet<GroupDetail>(
-        `/api/groups/${groupId}?include=subjects`
+        `/api/groups/${groupId}?include=subjects`,
+        {
+          onCached: (c) => {
+            setGroup(c);
+            setSubjects(c.subjects ?? []);
+            setLoading(false);
+          },
+        }
       );
       const subjectData = data.subjects ?? [];
       setGroup(data);
@@ -163,7 +170,15 @@ export default function GroupDetailPage() {
         ? `&search=${encodeURIComponent(debouncedQuestionSearch.trim())}`
         : "";
       const data = await apiGet<PagedGroupQuestions>(
-        `/api/practice-questions?groupId=${groupId}&scope=group&period=all&page=${questionPage}&limit=${GROUP_QUESTIONS_PAGE_SIZE}&sortBy=${questionSortBy}&sortDir=${questionSortDir}${searchQ}`
+        `/api/practice-questions?groupId=${groupId}&scope=group&period=all&page=${questionPage}&limit=${GROUP_QUESTIONS_PAGE_SIZE}&sortBy=${questionSortBy}&sortDir=${questionSortDir}${searchQ}`,
+        {
+          onCached: (c) => {
+            const items = Array.isArray(c) ? c : (c.items ?? []);
+            setGroupQuestions(items);
+            setQuestionTotal(Array.isArray(c) ? c.length : (c.total ?? items.length));
+            setQuestionsLoading(false);
+          },
+        }
       );
       const items = Array.isArray(data) ? data : (data.items ?? []);
       const total = Array.isArray(data) ? data.length : (data.total ?? items.length);

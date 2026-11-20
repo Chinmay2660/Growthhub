@@ -115,7 +115,13 @@ export default function GroupMockInterviewsTab({
     try {
       const query = roundId ? `&roundId=${roundId}` : "";
       const data = await apiGet<MockInterviewSchedule>(
-        `/api/mock-interviews/schedule?groupId=${groupId}${query}`
+        `/api/mock-interviews/schedule?groupId=${groupId}${query}`,
+        {
+          onCached: (c) => {
+            setSchedule(c);
+            setLoading(false);
+          },
+        }
       );
       setSchedule(data);
       if (!roundId || roundId === data.activeRoundId) {
