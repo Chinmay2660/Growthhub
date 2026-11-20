@@ -35,7 +35,12 @@ export default function AnalyticsPage() {
     }
     setLoading(true);
     try {
-      const d = await apiGet<AnalyticsData>("/api/analytics");
+      const d = await apiGet<AnalyticsData>("/api/analytics", {
+        onCached: (c) => {
+          setData(c);
+          setLoading(false);
+        },
+      });
       setData(d);
       setError("");
     } catch (err) {

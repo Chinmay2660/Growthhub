@@ -45,7 +45,12 @@ export default function DashboardPage() {
     if (silent) setRefreshing(true);
     else setInitialLoad(true);
     try {
-      const d = await apiGet<DashboardData>("/api/dashboard");
+      const d = await apiGet<DashboardData>("/api/dashboard", {
+        onCached: (c) => {
+          setData(c);
+          setInitialLoad(false);
+        },
+      });
       setData(d);
       setError("");
     } catch (err) {
