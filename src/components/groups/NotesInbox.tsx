@@ -53,7 +53,9 @@ export default function NotesInbox({
 
   const load = useCallback(async () => {
     try {
-      const data = await apiGet<{ items: Note[]; unread: number }>(`/api/group-notes?groupId=${groupId}`);
+      const data = await apiGet<{ items: Note[]; unread: number }>(`/api/group-notes?groupId=${groupId}`, {
+        onCached: (c) => setNotes(c.items),
+      });
       setNotes(data.items);
       onUnreadChange?.(data.unread);
     } catch {

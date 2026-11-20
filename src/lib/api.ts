@@ -28,8 +28,9 @@ const fetchOpts = { credentials: "include" as RequestCredentials };
 /* MongoDB stays the source of truth; this only mirrors and queues.    */
 /* ------------------------------------------------------------------ */
 
-/** Only the signed-in user's read-mostly data is mirrored. Shared/volatile data
- *  (groups, presence, notes, momentum, mock interviews) always goes to the network. */
+/** Read responses mirrored for offline viewing. Every online read still revalidates against the
+ *  server, so shared group data is only ever stale while offline or for the instant before the
+ *  fresh response lands. Group writes are NOT queued offline (see QUEUEABLE). */
 const CACHEABLE = [
   "/api/dashboard",
   "/api/analytics",
@@ -40,9 +41,23 @@ const CACHEABLE = [
   "/api/study-sessions",
   "/api/preparation-plan",
   "/api/prep-insights",
+  "/api/groups",
+  "/api/group-notes",
+  "/api/group-dynamics",
+  "/api/mock-interviews",
+  "/api/users",
 ];
 /** Writes to these may be queued while offline. */
-const QUEUEABLE = ["/api/subjects", "/api/topics", "/api/tasks", "/api/practice-questions", "/api/study-sessions"];
+/** Group notes (nudges, mark-as-read) are append-only and idempotent, so they queue safely too.
+ *  Admin actions (edit group, members, roles, codes, scheduling) deliberately do not. */
+const QUEUEABLE = [
+  "/api/subjects",
+  "/api/topics",
+  "/api/tasks",
+  "/api/practice-questions",
+  "/api/study-sessions",
+  "/api/group-notes",
+];
 
 const isCacheable = (url: string) => matches(CACHEABLE, url) || /^\/api\/groups\/[^/?]+\?view=header$/.test(url);
 

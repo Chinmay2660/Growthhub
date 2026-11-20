@@ -45,7 +45,13 @@ export default function GroupShell({
     if (!silent) setLoading(true);
     try {
       const data = await apiGet<Pick<Group, "name" | "description">>(
-        `/api/groups/${groupId}?view=header`
+        `/api/groups/${groupId}?view=header`,
+        {
+          onCached: (c) => {
+            setGroup({ name: c.name, description: c.description });
+            setLoading(false);
+          },
+        }
       );
       setGroup({ name: data.name, description: data.description });
       setError("");

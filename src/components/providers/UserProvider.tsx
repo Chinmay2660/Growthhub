@@ -12,6 +12,7 @@ import {
 import type { User } from "@/types";
 import toast from "react-hot-toast";
 import { ApiError, apiGet, apiPatch, apiPost, flushOutbox, pendingWriteCount, resetLocalData, setLocalUser } from "@/lib/api";
+import { clearOfflineCaches } from "@/lib/offline-cache";
 import { normalizeUser } from "@/lib/user";
 
 interface UserContextValue {
@@ -95,7 +96,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!signedIn) return;
     const ping = () => {
-      if (document.visibilityState === "visible") void apiPost("/api/presence").catch(() => {});
+      if (document.visibilityState === "visible" && navigator.onLine) void apiPost("/api/presence").catch(() => {});
     };
     ping();
     const id = window.setInterval(ping, 60_000);
@@ -147,6 +148,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
     await apiPost("/api/auth/logout");
     saveStoredUser(null);
+    await clearOfflineCaches();
     await resetLocalData(); // never leave one user's cached data on a shared browser
     setUser(null);
     return true;

@@ -42,7 +42,12 @@ export default function GroupsPage() {
     const silent = opts?.silent ?? false;
     if (!silent) setLoading(true);
     try {
-      const data = await apiGet<GroupListItem[]>("/api/groups");
+      const data = await apiGet<GroupListItem[]>("/api/groups", {
+        onCached: (c) => {
+          setGroups(c);
+          setLoading(false);
+        },
+      });
       setGroups(data);
       setError("");
     } catch (err) {

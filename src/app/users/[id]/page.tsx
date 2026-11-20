@@ -88,7 +88,14 @@ export default function UserProfilePage() {
     setLoading(true);
     setError("");
     try {
-      setProfile(await apiGet<UserProfile>(`/api/users/${userId}/profile`));
+      setProfile(
+        await apiGet<UserProfile>(`/api/users/${userId}/profile`, {
+          onCached: (c) => {
+            setProfile(c);
+            setLoading(false);
+          },
+        })
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load profile");
     } finally {

@@ -5,6 +5,7 @@ import { ThemeProvider, ThemeSync } from "@/components/providers/ThemeProvider";
 import { UserProvider } from "@/components/providers/UserProvider";
 import { ConfirmProvider } from "@/components/providers/ConfirmProvider";
 import AppShell from "@/components/layout/AppShell";
+import ServiceWorkerRegister from "@/components/providers/ServiceWorkerRegister";
 import ClientToaster from "@/components/ui/ClientToaster";
 import "./globals.css";
 
@@ -35,6 +36,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <ConfirmProvider>
             <UserProvider>
               <ThemeSync />
+              <ServiceWorkerRegister />
               <AppShell>{children}</AppShell>
               <ClientToaster />
             </UserProvider>
