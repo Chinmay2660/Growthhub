@@ -1,15 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
-import toast from "react-hot-toast";
-import Modal from "@/components/ui/Modal";
-import Button from "@/components/ui/Button";
+import dynamic from "next/dynamic";
 import { useUser } from "@/components/providers/UserProvider";
-import { apiPost, getErrorMessage } from "@/lib/api";
 
-type Priority = "critical" | "high" | "medium" | "low";
+// Dialogs are fetched the first time one opens, so the shell stays small.
+const CaptureDialogs = dynamic(() => import("./CaptureDialogs"), { ssr: false });
 
 const GO_KEYS: { key: string; label: string; href: (groupId?: string) => string | null }[] = [
   { key: "d", label: "Dashboard", href: () => "/dashboard" },
@@ -18,6 +16,8 @@ const GO_KEYS: { key: string; label: string; href: (groupId?: string) => string 
   { key: "a", label: "Analytics", href: () => "/analytics" },
   { key: "m", label: "Mock interviews", href: (g) => (g ? `/groups/${g}/mock-interviews` : null) },
 ];
+
+const SHORTCUT_LABELS = GO_KEYS.map(({ key, label }) => ({ key, label }));
 
 function isTyping(el: EventTarget | null) {
   const node = el as HTMLElement | null;
@@ -33,11 +33,25 @@ export default function ShortcutsAndCapture() {
   const router = useRouter();
   const [helpOpen, setHelpOpen] = useState(false);
   const [captureOpen, setCaptureOpen] = useState(false);
-  const [title, setTitle] = useState("");
-  const [priority, setPriority] = useState<Priority>("medium");
-  const [saving, setSaving] = useState(false);
+  const [dialogsLoaded, setDialogsLoaded] = useState(false);
   const awaitingGo = useRef<ReturnType<typeof setTimeout> | null>(null);
   const groupId = user?.activeGroupId;
+
+  // Warm the dialogs chunk when the browser is idle so the first shortcut press is instant.
+  useEffect(() => {
+    const warm = () => void import("./CaptureDialogs");
+    if (typeof requestIdleCallback === "function") {
+      const id = requestIdleCallback(warm, { timeout: 5000 });
+      return () => cancelIdleCallback(id);
+    }
+    const t = setTimeout(warm, 3000);
+    return () => clearTimeout(t);
+  }, []);
+
+  // Once opened, keep the dialogs mounted so they close with their animation and keep their draft.
+  useEffect(() => {
+    if (captureOpen || helpOpen) setDialogsLoaded(true);
+  }, [captureOpen, helpOpen]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -78,22 +92,6 @@ export default function ShortcutsAndCapture() {
     return () => window.removeEventListener(OPEN_QUICK_CAPTURE_EVENT, open);
   }, []);
 
-  const save = useCallback(async () => {
-    if (!groupId || !title.trim()) return;
-    setSaving(true);
-    try {
-      await apiPost("/api/tasks", { groupId, title: title.trim(), priority });
-      toast.success("Captured as a task");
-      setTitle("");
-      setPriority("medium");
-      setCaptureOpen(false);
-    } catch (err) {
-      toast.error(getErrorMessage(err, "Failed to save"));
-    } finally {
-      setSaving(false);
-    }
-  }, [groupId, title, priority]);
-
   if (!groupId) return null;
 
   return (
@@ -108,65 +106,16 @@ export default function ShortcutsAndCapture() {
         <Plus className="h-6 w-6" aria-hidden />
       </button>
 
-      <Modal open={captureOpen} onClose={() => setCaptureOpen(false)} title="Quick capture" size="sm">
-        <form
-          className="space-y-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void save();
-          }}
-        >
-          <input
-            autoFocus
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Revise OS scheduling, ask about CAP theorem…"
-            className="input !text-sm"
-            maxLength={200}
-          />
-          <div className="flex gap-1.5">
-            {(["low", "medium", "high", "critical"] as Priority[]).map((p) => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => setPriority(p)}
-                className={`flex-1 rounded-md border px-2 py-1 text-xs font-medium capitalize ${
-                  priority === p ? "border-brand bg-brand/10 text-brand" : "border-[var(--border)] text-[var(--muted)]"
-                }`}
-              >
-                {p}
-              </button>
-            ))}
-          </div>
-          <div className="flex justify-end">
-            <Button size="sm" type="submit" disabled={saving || !title.trim()}>
-              {saving ? "Saving…" : "Add task"}
-            </Button>
-          </div>
-        </form>
-      </Modal>
-
-      <Modal open={helpOpen} onClose={() => setHelpOpen(false)} title="Keyboard shortcuts" size="sm">
-        <ul className="space-y-1.5 text-sm">
-          <li className="flex justify-between">
-            <span>Quick capture</span>
-            <kbd className="rounded bg-[var(--surface-muted)] px-1.5 text-xs">c</kbd>
-          </li>
-          {GO_KEYS.map((g) => (
-            <li key={g.key} className="flex justify-between">
-              <span>Go to {g.label}</span>
-              <span>
-                <kbd className="rounded bg-[var(--surface-muted)] px-1.5 text-xs">g</kbd>{" "}
-                <kbd className="rounded bg-[var(--surface-muted)] px-1.5 text-xs">{g.key}</kbd>
-              </span>
-            </li>
-          ))}
-          <li className="flex justify-between">
-            <span>This help</span>
-            <kbd className="rounded bg-[var(--surface-muted)] px-1.5 text-xs">?</kbd>
-          </li>
-        </ul>
-      </Modal>
+      {(captureOpen || helpOpen || dialogsLoaded) && (
+        <CaptureDialogs
+          groupId={groupId}
+          captureOpen={captureOpen}
+          onCloseCapture={() => setCaptureOpen(false)}
+          helpOpen={helpOpen}
+          onCloseHelp={() => setHelpOpen(false)}
+          shortcuts={SHORTCUT_LABELS}
+        />
+      )}
     </>
   );
 }

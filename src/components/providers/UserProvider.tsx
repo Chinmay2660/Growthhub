@@ -11,7 +11,7 @@ import {
 } from "react";
 import type { User } from "@/types";
 import toast from "react-hot-toast";
-import { apiGet, apiPatch, apiPost, flushOutbox, pendingWriteCount, resetLocalData, setLocalUser } from "@/lib/api";
+import { ApiError, apiGet, apiPatch, apiPost, flushOutbox, pendingWriteCount, resetLocalData, setLocalUser } from "@/lib/api";
 import { normalizeUser } from "@/lib/user";
 
 interface UserContextValue {
@@ -32,6 +32,26 @@ const UserContext = createContext<UserContextValue>({
   logout: async () => true,
 });
 
+const USER_STORAGE_KEY = "growthhub-user";
+
+function loadStoredUser(): User | null {
+  try {
+    const raw = localStorage.getItem(USER_STORAGE_KEY);
+    return raw ? normalizeUser(JSON.parse(raw)) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveStoredUser(user: User | null) {
+  try {
+    if (user) localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+    else localStorage.removeItem(USER_STORAGE_KEY);
+  } catch {
+    /* storage unavailable: just skip the shortcut */
+  }
+}
+
 export function UserProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -42,16 +62,31 @@ export function UserProvider({ children }: { children: ReactNode }) {
       const next = normalizeUser(data);
       setLocalUser(next._id);
       setUser(next);
+      saveStoredUser(next);
       void flushOutbox();
-    } catch {
-      setLocalUser(null);
-      setUser(null);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        // The server answered and said we're not signed in.
+        setLocalUser(null);
+        setUser(null);
+        saveStoredUser(null);
+      }
+      // Network failure: keep whatever user we already have (cached or live) so the app works offline.
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    // Show the app shell from the last-known user right away so pages start loading in
+    // parallel with /api/auth/me instead of waiting behind it. The server stays authoritative:
+    // a 401 from /me (or from any API call) signs the user out.
+    const stored = loadStoredUser();
+    if (stored) {
+      setLocalUser(stored._id);
+      setUser(stored);
+      setLoading(false);
+    }
     refreshUser();
   }, [refreshUser]);
 
@@ -95,7 +130,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const updateUser = useCallback(async (updates: Partial<User>) => {
     if (!user) throw new Error("Not signed in");
     const updated = await apiPatch<User>(`/api/users/${user._id}`, updates);
-    setUser(normalizeUser(updated));
+    const next = normalizeUser(updated);
+    setUser(next);
+    saveStoredUser(next);
   }, [user]);
 
   const logout = useCallback(async () => {
@@ -109,6 +146,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
       if (!proceed) return false;
     }
     await apiPost("/api/auth/logout");
+    saveStoredUser(null);
     await resetLocalData(); // never leave one user's cached data on a shared browser
     setUser(null);
     return true;

@@ -15,6 +15,28 @@ async function getSessionUserId(request: NextRequest): Promise<string | null> {
   return verifySessionToken(token);
 }
 
+// Runaway-client guard: a fixed window per user, in process memory (use a shared store if you run
+// several instances). Generous enough that normal navigation never hits it.
+const API_LIMIT = 300;
+const API_WINDOW_MS = 60_000;
+const apiBuckets = new Map<string, { count: number; resetAt: number }>();
+
+function apiRateLimited(userId: string): number {
+  const now = Date.now();
+  if (apiBuckets.size > 5000) {
+    apiBuckets.forEach((b, k) => {
+      if (b.resetAt <= now) apiBuckets.delete(k);
+    });
+  }
+  const bucket = apiBuckets.get(userId);
+  if (!bucket || bucket.resetAt <= now) {
+    apiBuckets.set(userId, { count: 1, resetAt: now + API_WINDOW_MS });
+    return 0;
+  }
+  bucket.count += 1;
+  return bucket.count > API_LIMIT ? Math.ceil((bucket.resetAt - now) / 1000) : 0;
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const userId = await getSessionUserId(request);
@@ -25,6 +47,13 @@ export async function proxy(request: NextRequest) {
     }
     if (!userId) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+    const retryAfter = apiRateLimited(userId);
+    if (retryAfter > 0) {
+      return NextResponse.json(
+        { success: false, error: "Too many requests" },
+        { status: 429, headers: { "Retry-After": String(retryAfter) } }
+      );
     }
     const headers = new Headers(request.headers);
     headers.delete("x-user-id");

@@ -15,11 +15,11 @@ import StudySession from "@/models/StudySession";
 import PreparationPlan from "@/models/PreparationPlan";
 import type { GroupRole } from "@/types";
 import { canManageGroup } from "@/lib/group-roles";
+import { generateJoinCode } from "@/lib/auth";
 
 export { canManageGroup };
 import {
   formatSubjectTrack,
-  generateJoinCode,
   joinCodeExpiryDate,
   needsJoinCodeReissue,
   normalizeQuestionStatus,

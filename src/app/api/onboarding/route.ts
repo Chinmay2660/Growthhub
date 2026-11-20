@@ -3,8 +3,8 @@ import { requireAuthUserId, unauthorized } from "@/lib/api-auth";
 import { jsonOk, jsonError } from "@/lib/utils";
 import { serializeDoc, seedGroupSubjects } from "@/lib/services";
 import { normalizeUser } from "@/lib/user";
+import { generateJoinCode } from "@/lib/auth";
 import {
-  generateJoinCode,
   joinCodeExpiryDate,
   isGroupFull,
   isJoinCodeActive,
