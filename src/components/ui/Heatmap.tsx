@@ -66,7 +66,7 @@ export function Heatmap({ heat, todayKey, label }: { heat: Record<string, number
         <span className="font-semibold text-[var(--foreground)]">{total}</span> question{total === 1 ? "" : "s"} in {year}
       </p>
       <div role="img" aria-label={label} className="flex" style={{ gap: GAP }}>
-        <div className="flex shrink-0 flex-col text-[10px] leading-none text-[var(--muted)]" style={{ width: DAY_LABEL_W - GAP, gap: GAP, paddingTop: cell + GAP }}>
+        <div className="flex shrink-0 flex-col text-xs leading-none text-[var(--muted)]" style={{ width: DAY_LABEL_W - GAP, gap: GAP, paddingTop: cell + GAP }}>
           {DAYS.map((d, i) => (
             <span key={i} className="flex items-center" style={{ height: cell }}>
               {d}
@@ -75,7 +75,7 @@ export function Heatmap({ heat, todayKey, label }: { heat: Record<string, number
         </div>
         {grid.map((week, w) => (
           <div key={w} className="flex flex-col" style={{ gap: GAP, width: cell }}>
-            <span className="relative text-[10px] leading-none text-[var(--muted)]" style={{ height: cell }}>
+            <span className="relative text-xs leading-none text-[var(--muted)]" style={{ height: cell }}>
               <span className="absolute bottom-0 left-0 whitespace-nowrap">{monthLabels[w]}</span>
             </span>
             {week.map((key, d) => {
@@ -98,7 +98,7 @@ export function Heatmap({ heat, todayKey, label }: { heat: Record<string, number
 
 export function HeatLegend() {
   return (
-    <div className="flex items-center gap-1 text-[10px] text-[var(--muted)]">
+    <div className="flex items-center gap-1 text-xs text-[var(--muted)]">
       Less
       {HEAT_LEVELS.map((c, i) => (
         <span key={i} className={clsx("rounded-[2px]", c)} style={{ width: CELL, height: CELL }} />
@@ -126,7 +126,7 @@ export function WeekHeatmap({ heat, todayKey, label }: { heat: Record<string, nu
               className={clsx("aspect-square w-full rounded-md", HEAT_LEVELS[level(n)], isToday && "ring-2 !ring-brand/40")}
               title={`${n} question${n === 1 ? "" : "s"} on ${key}`}
             />
-            <span className={clsx("text-[10px]", isToday ? "font-semibold text-brand" : "text-[var(--muted)]")}>
+            <span className={clsx("text-xs", isToday ? "font-semibold text-brand" : "text-[var(--muted)]")}>
               {DAYS[days[i].getUTCDay()]}
             </span>
           </div>

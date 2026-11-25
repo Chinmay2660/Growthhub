@@ -44,6 +44,9 @@ export default function QuestionFormModal({
   saving,
   onSave,
   onCreateTrack,
+  groupOptions,
+  groupId,
+  onGroupChange,
 }: {
   open: boolean;
   onClose: () => void;
@@ -58,6 +61,10 @@ export default function QuestionFormModal({
   onSave: () => void;
   /** Lets someone create the first track right here instead of leaving the form. */
   onCreateTrack?: (name: string) => Promise<void>;
+  /** Groups a shared question can go to. The picker only appears when there is more than one. */
+  groupOptions?: { value: string; label: string }[];
+  groupId?: string;
+  onGroupChange?: (groupId: string) => void;
 }) {
   const [trackName, setTrackName] = useState("");
   const [creatingTrack, setCreatingTrack] = useState(false);
@@ -93,6 +100,17 @@ export default function QuestionFormModal({
             rows={3}
           />
         </FormField>
+
+        {!editing && values.scope === "group" && groupOptions && groupOptions.length > 1 && (
+          <FormField label="Group" hint="Everyone in this group will get the question.">
+            <Select
+              value={groupId ?? ""}
+              onChange={(g) => onGroupChange?.(g)}
+              aria-label="Group"
+              options={groupOptions}
+            />
+          </FormField>
+        )}
 
         <div className="grid gap-4 sm:grid-cols-2">
           <FormField label="Track">

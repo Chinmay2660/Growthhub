@@ -5,6 +5,8 @@ import { ThemeProvider, ThemeSync } from "@/components/providers/ThemeProvider";
 import { UserProvider } from "@/components/providers/UserProvider";
 import { ConfirmProvider } from "@/components/providers/ConfirmProvider";
 import AppShell from "@/components/layout/AppShell";
+import SplashScreen from "@/components/layout/SplashScreen";
+import RouteProgress from "@/components/layout/RouteProgress";
 import ServiceWorkerRegister from "@/components/providers/ServiceWorkerRegister";
 import ClientToaster from "@/components/ui/ClientToaster";
 import "./globals.css";
@@ -15,7 +17,7 @@ const jakarta = Plus_Jakarta_Sans({
   display: "swap",
 });
 
-const themeScript = `(function(){try{var t=localStorage.getItem("growthhub-theme")||localStorage.getItem("switch-theme");var d=window.matchMedia("(prefers-color-scheme: dark)").matches;var dark=t==="dark"||((!t||t==="system")&&d);document.documentElement.classList.toggle("dark",dark)}catch(e){}})();`;
+const themeScript = `(function(){try{var t=localStorage.getItem("growthhub-theme")||localStorage.getItem("switch-theme");var d=window.matchMedia("(prefers-color-scheme: dark)").matches;var dark=t==="dark"||((!t||t==="system")&&d);document.documentElement.classList.toggle("dark",dark);var a=localStorage.getItem("growthhub-accent");if(a)document.documentElement.dataset.accent=a}catch(e){}})();`;
 
 export const metadata: Metadata = {
   title: "GrowthHub",
@@ -37,8 +39,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <UserProvider>
               <ThemeSync />
               <ServiceWorkerRegister />
+              <RouteProgress />
               <AppShell>{children}</AppShell>
               <ClientToaster />
+              <SplashScreen />
             </UserProvider>
           </ConfirmProvider>
         </ThemeProvider>

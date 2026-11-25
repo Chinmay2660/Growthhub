@@ -23,15 +23,15 @@ export default function GroupGamificationPanel({
         {board.length > 0 && (
           <dl className="mb-4 grid grid-cols-3 gap-2 rounded-xl bg-[var(--surface-muted)] p-3 text-center">
             <div>
-              <dt className="text-[11px] text-[var(--muted)]">Group total</dt>
+              <dt className="text-xs text-[var(--muted)]">Group total</dt>
               <dd className="text-lg font-semibold tabular-nums">{totalSolved}</dd>
             </div>
             <div>
-              <dt className="text-[11px] text-[var(--muted)]">Of possible</dt>
+              <dt className="text-xs text-[var(--muted)]">Of possible</dt>
               <dd className="text-lg font-semibold tabular-nums">{possible}</dd>
             </div>
             <div>
-              <dt className="text-[11px] text-[var(--muted)]">Complete</dt>
+              <dt className="text-xs text-[var(--muted)]">Complete</dt>
               <dd className="text-lg font-semibold tabular-nums">{overallPct}%</dd>
             </div>
           </dl>

@@ -568,13 +568,17 @@ function mapTodayQuestion(
 
 export async function getTodayQuestionsForUser(
   userId: string,
-  groupIdOrIds: string | string[]
+  groupIdOrIds: string | string[],
+  opts: { includeOverdue?: boolean } = {}
 ): Promise<{ group: TodayQuestion[]; personal: TodayQuestion[] }> {
   const groupIds = Array.isArray(groupIdOrIds) ? groupIdOrIds : [groupIdOrIds];
   const range = questionDatePeriodRange("today");
   if (!range) return { group: [], personal: [] };
 
-  const dateFilter = { practiceDate: { $gte: range.start, $lt: range.end } };
+  // With includeOverdue, anything scheduled before today comes along; solved ones are dropped below.
+  const dateFilter = {
+    practiceDate: opts.includeOverdue ? { $lt: range.end } : { $gte: range.start, $lt: range.end },
+  };
 
   const [groupQuestions, personalQuestions, subjects] = await Promise.all([
     PracticeQuestion.find({ groupId: { $in: groupIds }, scope: "group", ...dateFilter })
@@ -618,19 +622,33 @@ export async function getTodayQuestionsForUser(
   const progressMap = new Map(progress.map((p) => [String(p.questionId), p]));
   const activeSubjectIds = new Set(subjectMap.keys());
 
+  const startMs = range.start.getTime();
+  // Overdue first (oldest first), then today's; a solved overdue question is done with and does not come back.
+  const withOverdue = (items: TodayQuestion[]): TodayQuestion[] =>
+    items
+      .map((q) => {
+        const at = q.practiceDate ? new Date(q.practiceDate).getTime() : startMs;
+        const days = at < startMs ? Math.max(1, Math.round((startMs - at) / 86_400_000)) : 0;
+        return days > 0 ? { ...q, overdueDays: days } : q;
+      })
+      .filter((q) => !q.overdueDays || (q.status !== "done" && q.status !== "revised"))
+      .sort((a, b) => (b.overdueDays ?? 0) - (a.overdueDays ?? 0));
+
   return {
-    group: groupQuestions
-      .filter((q) => activeSubjectIds.has(String(q.subjectId)))
-      .map((q) => ({
-        ...mapTodayQuestion({ ...q, scope: "group" }, subjectMap, progressMap),
-        groupId: String(q.groupId),
-        groupName: groupNames.get(String(q.groupId)),
-      })),
-    personal: personalQuestions
-      .filter((q) => activeSubjectIds.has(String(q.subjectId)))
-      .map((q) =>
-        mapTodayQuestion({ ...q, scope: "personal" }, subjectMap, progressMap)
-      ),
+    group: withOverdue(
+      groupQuestions
+        .filter((q) => activeSubjectIds.has(String(q.subjectId)))
+        .map((q) => ({
+          ...mapTodayQuestion({ ...q, scope: "group" }, subjectMap, progressMap),
+          groupId: String(q.groupId),
+          groupName: groupNames.get(String(q.groupId)),
+        }))
+    ),
+    personal: withOverdue(
+      personalQuestions
+        .filter((q) => activeSubjectIds.has(String(q.subjectId)))
+        .map((q) => mapTodayQuestion({ ...q, scope: "personal" }, subjectMap, progressMap))
+    ),
   };
 }
 

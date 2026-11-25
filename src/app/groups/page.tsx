@@ -1,5 +1,6 @@
 "use client";
 
+import { useRevalidate } from "@/lib/use-revalidate";
 import { useDocumentTitle } from "@/lib/use-document-title";
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
@@ -62,6 +63,7 @@ export default function GroupsPage() {
   }, [user?._id]);
 
   useEffect(() => { load(); }, [load]);
+  useRevalidate(() => void load({ silent: true }));
 
   const [switchingId, setSwitchingId] = useState<string | null>(null);
   const makeActive = async (groupId: string) => {
@@ -204,12 +206,12 @@ export default function GroupsPage() {
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1">
                     {isGroupAdmin && (
-                      <Chip variant="muted" className="!text-[10px]">
+                      <Chip variant="muted" className="!text-xs">
                         Admin
                       </Chip>
                     )}
                     {isActive && (
-                      <Chip variant="brand" className="!text-[10px]">
+                      <Chip variant="brand" className="!text-xs">
                         Active
                       </Chip>
                     )}

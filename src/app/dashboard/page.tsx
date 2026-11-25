@@ -1,5 +1,6 @@
 "use client";
 
+import { useRevalidate } from "@/lib/use-revalidate";
 import { useDocumentTitle } from "@/lib/use-document-title";
 import { useEffect, useState, useCallback } from "react";
 import { useUser } from "@/components/providers/UserProvider";
@@ -17,7 +18,6 @@ const NotesInbox = dynamic(() => import("@/components/groups/NotesInbox"), { ssr
 import TodayPlanCard from "@/components/dashboard/TodayPlanCard";
 import TodayHero from "@/components/dashboard/TodayHero";
 import RealityCheck from "@/components/dashboard/RealityCheck";
-import OverdueCard from "@/components/dashboard/OverdueCard";
 import GroupPulse from "@/components/dashboard/GroupPulse";
 import NextMockCard from "@/components/dashboard/NextMockCard";
 import Button from "@/components/ui/Button";
@@ -70,6 +70,7 @@ export default function DashboardPage() {
   }, [user?._id, activeGroupId, refreshUser]);
 
   useEffect(() => { load(); }, [load]);
+  useRevalidate(() => void load(true));
 
   const updateQuestionStatus = async (id: string, status: QuestionStatus) => {
     const normalized = normalizeQuestionStatus(status);
@@ -164,7 +165,6 @@ export default function DashboardPage() {
         targetRole={user?.targetRole}
       />
 
-      <OverdueCard overdue={data.overdue} />
 
       <TodayPlanCard
         todayQuestions={data.todayQuestions}

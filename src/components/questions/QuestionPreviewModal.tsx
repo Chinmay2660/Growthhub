@@ -23,13 +23,13 @@ export default function QuestionPreviewModal({
     <Modal open={open} onClose={onClose} title="Question">
       <div className="space-y-4">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
             Title
           </p>
           <p className="mt-1 text-sm font-semibold text-[var(--foreground)]">{title || "—"}</p>
         </div>
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
             Description
           </p>
           {description ? (

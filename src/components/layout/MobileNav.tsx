@@ -7,6 +7,7 @@ import clsx from "clsx";
 import { ExternalLink, Menu, X } from "lucide-react";
 import { useUser } from "@/components/providers/UserProvider";
 import { openCareerFlow } from "@/lib/apps-client";
+import { prefetchRoute } from "@/lib/offline-warmup";
 import { useUnreadNotes } from "@/lib/use-unread-notes";
 import { buildMobileNav, buildMobileMoreNav, isExternalNavItem, isNavItemActive } from "./nav-config";
 
@@ -96,6 +97,8 @@ export default function MobileNav() {
                 <Link
                   key={item.id}
                   href={item.href}
+                  onPointerDown={() => prefetchRoute(item.href, user?.activeGroupId)}
+                  onPointerEnter={() => prefetchRoute(item.href, user?.activeGroupId)}
                   className={itemClassName}
                   aria-current={active ? "page" : undefined}
                 >
@@ -112,7 +115,7 @@ export default function MobileNav() {
           const active = !isExternalNavItem(item) && isNavItemActive(pathname, item.href);
           const Icon = item.icon;
           const className = clsx(
-            "flex flex-1 flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-[10px] font-medium transition-colors",
+            "flex flex-1 flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-xs font-medium transition-colors",
             active ? "bg-brand/10 text-brand" : "text-[var(--muted)]"
           );
 
@@ -140,6 +143,8 @@ export default function MobileNav() {
             <Link
               key={item.id}
               href={item.href}
+              onPointerDown={() => prefetchRoute(item.href, user?.activeGroupId)}
+              onPointerEnter={() => prefetchRoute(item.href, user?.activeGroupId)}
               className={className}
               aria-current={active ? "page" : undefined}
             >
@@ -163,7 +168,7 @@ export default function MobileNav() {
           type="button"
           onClick={() => setMoreOpen((open) => !open)}
           className={clsx(
-            "flex flex-1 flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-[10px] font-medium transition-colors",
+            "flex flex-1 flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-xs font-medium transition-colors",
             moreOpen || moreActive ? "text-brand" : "text-[var(--muted)]"
           )}
           aria-expanded={moreOpen}

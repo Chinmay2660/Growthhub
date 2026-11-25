@@ -1,5 +1,6 @@
 "use client";
 
+import { useRevalidate } from "@/lib/use-revalidate";
 import { useCallback, useEffect, useState } from "react";
 import { BellRing, Check } from "lucide-react";
 import Card, { CardHeader } from "@/components/ui/Card";
@@ -67,6 +68,7 @@ export default function NotesInbox({
   useEffect(() => {
     void load();
   }, [load]);
+  useRevalidate(() => void load());
 
   const markRead = async (ids?: string[]) => {
     // Update the screen first; the request only records it.
@@ -119,7 +121,7 @@ export default function NotesInbox({
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium">{describe(n)}</p>
               {n.message && <p className="mt-0.5 text-sm text-[var(--muted)]">{n.message}</p>}
-              <p className="mt-1 text-[11px] text-[var(--muted)]">{timeAgo(n.createdAt, now)}</p>
+              <p className="mt-1 text-xs text-[var(--muted)]">{timeAgo(n.createdAt, now)}</p>
             </div>
             {!n.read && (
               <button

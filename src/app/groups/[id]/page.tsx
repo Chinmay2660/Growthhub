@@ -384,6 +384,17 @@ export default function GroupDetailPage() {
   const canEditGroup = canManageGroup(myRole);
   const setHeaderActions = useGroupHeaderActions();
 
+  // Scrolls the content area only. scrollIntoView would also scroll the browser window, and since the whole
+  // app shell sits in a fixed layer that slid the sidebar up and left blank space under the page.
+  const scrollToInvite = useCallback(() => {
+    const main = document.getElementById("app-main");
+    const target = document.getElementById("invite-members");
+    if (!main || !target) return;
+    const offset = target.getBoundingClientRect().top - main.getBoundingClientRect().top;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    main.scrollTo({ top: main.scrollTop + offset - 16, behavior: reduce ? "auto" : "smooth" });
+  }, []);
+
   const openEditModal = useCallback(() => {
     if (!group) return;
     setEditName(group.name);
@@ -402,7 +413,7 @@ export default function GroupDetailPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => document.getElementById("invite-members")?.scrollIntoView({ behavior: "smooth", block: "center" })}
+            onClick={scrollToInvite}
           >
             Invite
           </Button>
@@ -415,7 +426,7 @@ export default function GroupDetailPage() {
       setHeaderActions(null);
     }
     return () => setHeaderActions(null);
-  }, [canEditGroup, setHeaderActions, openEditModal]);
+  }, [canEditGroup, setHeaderActions, openEditModal, scrollToInvite]);
 
   const saveGroup = async () => {
     const goal = Number(editWeeklyGoal);

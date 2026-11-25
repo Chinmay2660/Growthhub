@@ -36,12 +36,24 @@ export type QuestionListItem = {
   subjectName?: string;
   link?: string;
   scope?: ContentScope;
+  /** Which group a shared question belongs to (shown when the person is in several groups). */
+  groupName?: string;
+  /** Scheduled before today and still unsolved: the row is highlighted. */
+  overdueDays?: number;
 };
 
 /** Done and Revised both count as solved. */
 function isSolved(status: QuestionListItem["status"]): boolean {
   const s = normalizeQuestionStatus(status);
   return s === "done" || s === "revised";
+}
+
+function OverdueTag({ days }: { days: number }) {
+  return (
+    <span className="inline-flex items-center rounded-full bg-red-500/10 px-2 py-0.5 text-xs font-semibold text-red-700 dark:text-red-300">
+      Overdue {days}d
+    </span>
+  );
 }
 
 function questionDateLabel(q: QuestionListItem): string {
@@ -119,6 +131,7 @@ export default function QuestionListView({
   onEdit,
   onDelete,
   showScope = false,
+  showGroup = false,
   showActions = false,
   sortBy,
   sortDir,
@@ -133,6 +146,8 @@ export default function QuestionListView({
   onEdit?: (question: QuestionListItem) => void;
   onDelete?: (id: string) => void;
   showScope?: boolean;
+  /** Adds a Group column; use it when shared questions come from more than one group. */
+  showGroup?: boolean;
   showActions?: boolean;
   sortBy?: QuestionSortField;
   sortDir?: QuestionSortDir;
@@ -149,18 +164,18 @@ export default function QuestionListView({
     return questions.filter((q) => questionMatchesSearch(q, localSearch));
   }, [questions, localSearch]);
 
-  const questionCol = "min-w-[14rem] lg:min-w-[18rem]";
-  const scopeCol = "min-w-[6.5rem]";
-  const statusCol = "min-w-[10rem]";
-  const dateCol = "min-w-[8.5rem]";
-  const trackCol = "min-w-[7rem]";
+  const questionCol = "min-w-[12rem]";
+  const scopeCol = "w-24";
+  const statusCol = "w-40";
+  const dateCol = "w-32";
+  const trackCol = "w-28";
   const linkCol = "w-14";
   const viewCol = "w-14";
-  const actionsCol = "min-w-[9rem]";
+  const actionsCol = "w-1";
   const [preview, setPreview] = useState<QuestionListItem | null>(null);
   const confirm = useConfirm();
   const tableColSpan =
-    6 + (showScope ? 1 : 0) + (showActions ? 1 : 0);
+    6 + (showScope ? 1 : 0) + (showGroup ? 1 : 0) + (showActions ? 1 : 0);
 
   const handleDelete = async (q: QuestionListItem) => {
     if (!onDelete) return;
@@ -222,7 +237,11 @@ export default function QuestionListView({
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--muted)]">
               {showScope && q.scope && <QuestionScopeChip scope={q.scope} />}
-              <span>{questionDateLabel(q)}</span>
+              {showGroup && q.groupName && (
+                <span className="rounded-full bg-brand/10 px-2 py-0.5 text-xs font-semibold text-brand">{q.groupName}</span>
+              )}
+              {q.overdueDays ? <OverdueTag days={q.overdueDays} /> : null}
+              <span className={q.overdueDays ? "font-medium text-red-700 dark:text-red-300" : undefined}>{questionDateLabel(q)}</span>
               <span className="rounded-md bg-[var(--surface-muted)] px-1.5 py-0.5">
                 {q.trackLabel || q.subjectName}
               </span>
@@ -251,16 +270,16 @@ export default function QuestionListView({
 
       <div
         className={clsx(
-          "relative hidden min-h-48 rounded-xl border border-[var(--border)] bg-[var(--surface)] lg:block"
+          "relative hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] lg:block"
         )}
       >
         {loading && questions.length > 0 && <LoadingOverlay label="Loading questions" />}
-        <div className="overflow-x-auto">
-        <table className="w-full min-w-[48rem] border-separate border-spacing-y-1 text-left text-sm">
+        <div className="overflow-x-auto px-1 pb-1">
+        <table className="w-full border-separate border-spacing-y-1 text-left text-sm">
           <caption className="sr-only">Practice questions</caption>
           <thead className="bg-[var(--surface-muted)] text-xs uppercase tracking-wide text-[var(--muted)]">
             <tr>
-              <th scope="col" className={`${questionCol} px-4 py-3 font-semibold`}>Question</th>
+              <th scope="col" className={`${questionCol} px-3 py-3 font-semibold`}>Question</th>
               {showScope && (
                 <SortableHeader
                   label="Scope"
@@ -268,8 +287,13 @@ export default function QuestionListView({
                   sortBy={activeSortBy}
                   sortDir={activeSortDir}
                   onSort={onSort}
-                  className={`${scopeCol} px-4 py-3`}
+                  className={`${scopeCol} px-3 py-3`}
                 />
+              )}
+              {showGroup && (
+                <th scope="col" className="min-w-[7rem] px-3 py-3 font-semibold">
+                  Group
+                </th>
               )}
               <SortableHeader
                 label="Status"
@@ -277,7 +301,7 @@ export default function QuestionListView({
                 sortBy={activeSortBy}
                 sortDir={activeSortDir}
                 onSort={onSort}
-                className={`${statusCol} px-4 py-3`}
+                className={`${statusCol} px-3 py-3`}
               />
               <SortableHeader
                 label="Date"
@@ -285,7 +309,7 @@ export default function QuestionListView({
                 sortBy={activeSortBy}
                 sortDir={activeSortDir}
                 onSort={onSort}
-                className={`${dateCol} px-4 py-3`}
+                className={`${dateCol} px-3 py-3`}
               />
               <SortableHeader
                 label="Track"
@@ -293,12 +317,12 @@ export default function QuestionListView({
                 sortBy={activeSortBy}
                 sortDir={activeSortDir}
                 onSort={onSort}
-                className={`${trackCol} px-4 py-3`}
+                className={`${trackCol} px-3 py-3`}
               />
               <th scope="col" className={`${linkCol} px-2 py-3 font-semibold`}>Link</th>
               <th scope="col" className={`${viewCol} px-2 py-3 font-semibold`}>View</th>
               {showActions && (
-                <th scope="col" className={`${actionsCol} px-4 py-3 font-semibold`}>Actions</th>
+                <th scope="col" className={`${actionsCol} px-3 py-3 font-semibold`}>Actions</th>
               )}
             </tr>
           </thead>
@@ -322,11 +346,12 @@ export default function QuestionListView({
                 key={q._id}
                 className={clsx(
                   "question-row",
+                  q.overdueDays && "bg-red-500/[0.06] shadow-[inset_3px_0_0_0_rgb(239_68_68)]",
                   pointBurst?.id === q._id && "question-row-points-flash"
                 )}
                 style={questionRowVars(q.status)}
               >
-                <td className="qs-row-cell px-4 py-3.5 text-[var(--foreground)]">
+                <td className="qs-row-cell px-3 py-3.5 text-[var(--foreground)]">
                   <div className="flex items-start gap-3">
                     <Checkbox
                       checked={isSolved(q.status)}
@@ -338,12 +363,21 @@ export default function QuestionListView({
                   </div>
                 </td>
                 {showScope && (
-                  <td className="qs-row-cell px-4 py-3.5">
+                  <td className="qs-row-cell px-3 py-3.5">
                     {q.scope ? <QuestionScopeChip scope={q.scope} /> : "—"}
                   </td>
                 )}
-                <td className={`qs-row-cell ${statusCol} px-4 py-3.5`}>
-                  <div className="relative inline-block min-w-[9rem]">
+                {showGroup && (
+                  <td className="qs-row-cell px-3 py-3.5">
+                    {q.groupName ? (
+                      <span className="rounded-full bg-brand/10 px-2 py-0.5 text-xs font-semibold text-brand">{q.groupName}</span>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                )}
+                <td className={`qs-row-cell ${statusCol} px-3 py-3.5`}>
+                  <div className="relative inline-block min-w-[8.5rem]">
                     {pointBurst?.id === q._id && (
                       <div className="pointer-events-none absolute left-1/2 top-0 z-10 -translate-x-1/2">
                         <QuestionPointsBurst points={pointBurst.points} />
@@ -356,10 +390,11 @@ export default function QuestionListView({
                     />
                   </div>
                 </td>
-                <td className={`qs-row-cell whitespace-nowrap px-4 py-3.5 text-[var(--muted)] ${dateCol}`}>
-                  {questionDateLabel(q)}
+                <td className={`qs-row-cell whitespace-nowrap px-3 py-3.5 text-[var(--muted)] ${dateCol}`}>
+                  {q.overdueDays ? <span className="mr-2"><OverdueTag days={q.overdueDays} /></span> : null}
+                  <span className={q.overdueDays ? "font-medium text-red-700 dark:text-red-300" : undefined}>{questionDateLabel(q)}</span>
                 </td>
-                <td className={`qs-row-cell whitespace-nowrap px-4 py-3.5 ${trackCol}`}>
+                <td className={`qs-row-cell whitespace-nowrap px-3 py-3.5 ${trackCol}`}>
                   <span className="rounded-md bg-[var(--surface-muted)] px-2 py-0.5 text-xs text-[var(--muted)]">
                     {q.trackLabel || q.subjectName}
                   </span>
@@ -378,7 +413,7 @@ export default function QuestionListView({
                   </button>
                 </td>
                 {showActions && (
-                  <td className="qs-row-cell px-4 py-3.5 text-right">
+                  <td className="qs-row-cell whitespace-nowrap px-3 py-3.5 text-right">
                     <div className="flex justify-end gap-1">
                       {onEdit && (
                         <Button variant="ghost" size="sm" onClick={() => onEdit(q)}>

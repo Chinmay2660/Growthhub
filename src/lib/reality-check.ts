@@ -479,36 +479,8 @@ export function highlightSegments(text: string): QuoteSegment[] {
 }
 
 /* ------------------------------------------------------------------ */
-/* Saved preferences                                                     */
+/* Rotation                                                              */
 /* ------------------------------------------------------------------ */
 
-export type RealityPrefs = {
-  /** Change the quote on its own every minute. */
-  autoRotate: boolean;
-  /** "all" or one category id. */
-  category: "all" | RealityCategoryId;
-  /** Show only the slim bar until expanded. */
-  collapsed: boolean;
-};
-
-export const DEFAULT_REALITY_PREFS: RealityPrefs = { autoRotate: true, category: "all", collapsed: false };
-export const REALITY_PREFS_KEY = "growthhub-reality-check";
+/** How long each quote stays before the next one appears. */
 export const ROTATE_EVERY_MS = 60_000;
-
-export function parseRealityPrefs(raw: string | null): RealityPrefs {
-  if (!raw) return DEFAULT_REALITY_PREFS;
-  try {
-    const v = JSON.parse(raw) as Partial<RealityPrefs>;
-    const category =
-      v.category === "all" || REALITY_CATEGORIES.some((c) => c.id === v.category)
-        ? (v.category as RealityPrefs["category"])
-        : "all";
-    return {
-      autoRotate: typeof v.autoRotate === "boolean" ? v.autoRotate : true,
-      category,
-      collapsed: typeof v.collapsed === "boolean" ? v.collapsed : false,
-    };
-  } catch {
-    return DEFAULT_REALITY_PREFS;
-  }
-}

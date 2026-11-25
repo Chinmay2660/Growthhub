@@ -86,7 +86,7 @@ function AuthDivider({ label }: { label: string }) {
       <div className="absolute inset-0 flex items-center">
         <div className="w-full border-t border-[var(--border)]" />
       </div>
-      <div className="relative flex justify-center text-[10px] uppercase tracking-wide">
+      <div className="relative flex justify-center text-xs uppercase tracking-wide">
         <span className="bg-[var(--card)] px-2 text-[var(--muted)]">{label}</span>
       </div>
     </div>
@@ -353,7 +353,7 @@ function LoginPanel() {
   return (
     <Card padded={false} className="animate-scale-in p-4 sm:p-5">
       <div className="mb-3 text-center">
-        <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-brand/20 bg-brand/10 px-2.5 py-0.5 text-[11px] font-medium text-brand">
+        <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-brand/20 bg-brand/10 px-2.5 py-0.5 text-xs font-medium text-brand">
           <Sparkles className="h-3 w-3" aria-hidden />
           Shared platform login
         </div>
@@ -492,11 +492,11 @@ function LoginPanel() {
       <div className="mt-3 grid grid-cols-2 gap-2">
         <div className="flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-2 py-2">
           <Zap className="h-3 w-3 shrink-0 text-brand" aria-hidden />
-          <span className="text-[11px] font-medium text-[var(--foreground)]">One login</span>
+          <span className="text-xs font-medium text-[var(--foreground)]">One login</span>
         </div>
         <div className="flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-2 py-2">
           <Shield className="h-3 w-3 shrink-0 text-success" aria-hidden />
-          <span className="text-[11px] font-medium text-[var(--foreground)]">Two apps</span>
+          <span className="text-xs font-medium text-[var(--foreground)]">Two apps</span>
         </div>
       </div>
     </Card>

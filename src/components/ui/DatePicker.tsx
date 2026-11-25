@@ -183,7 +183,7 @@ export default function DatePicker({
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>
-        <div className="mb-1 grid grid-cols-7 text-center text-[11px] font-medium text-[var(--muted)]">
+        <div className="mb-1 grid grid-cols-7 text-center text-xs font-medium text-[var(--muted)]">
           {WEEKDAYS.map((w) => (
             <div key={w} className="py-1">
               {w}

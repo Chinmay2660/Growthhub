@@ -14,9 +14,10 @@ const config: Config = {
       },
       colors: {
         brand: {
-          DEFAULT: "#A84D1F",
-          hover: "#8F4118",
-          light: "#F0E4DA",
+          // Driven by CSS variables so the accent colour can be switched (see globals.css and lib/accent.ts).
+          DEFAULT: "rgb(var(--brand-rgb) / <alpha-value>)",
+          hover: "rgb(var(--brand-hover-rgb) / <alpha-value>)",
+          light: "rgb(var(--brand-light-rgb) / <alpha-value>)",
           muted: "#8B6F5C",
           sage: "#3D6B59",
         },

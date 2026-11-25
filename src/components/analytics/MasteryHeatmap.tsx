@@ -41,7 +41,7 @@ export default function MasteryHeatmap({ subjects }: { subjects: SubjectMastery[
           ))}
         </ul>
       )}
-      <div className="mt-3 flex flex-wrap items-center gap-3 text-[10px] text-[var(--muted)]">
+      <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-[var(--muted)]">
         <span>
           <span className="mr-1 inline-block h-2 w-2 rounded-sm bg-red-500/40" />
           &lt;25%
