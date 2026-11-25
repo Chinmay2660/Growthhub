@@ -4,7 +4,6 @@ import Group from "@/models/Group";
 import Subject from "@/models/Subject";
 import Topic from "@/models/Topic";
 import TopicProgress from "@/models/TopicProgress";
-import PrepTask from "@/models/PrepTask";
 import PracticeQuestion from "@/models/PracticeQuestion";
 import QuestionProgress from "@/models/QuestionProgress";
 import MockInterview from "@/models/MockInterview";
@@ -17,15 +16,14 @@ import PreparationPlan from "@/models/PreparationPlan";
 import {
   addIstDays,
   istDateFromParts,
-  joinCodeExpiryDate,
-  startOfDay,
+  joinCodeExpiryDate,
   toDateInputValue,
 } from "@/lib/utils";
-import { hashAuthCode } from "@/lib/auth";
+import { UNUSABLE_AUTH_HASH } from "@/lib/auth";
 
 export const GUEST_USERNAME = "guest_demo";
-// ponytail: unusable placeholder — guest login uses /api/auth/guest only
-const GUEST_AUTH_HASH = hashAuthCode("000000");
+// The demo accounts have no usable login code: guests enter through /api/auth/guest only.
+const GUEST_AUTH_HASH = UNUSABLE_AUTH_HASH;
 
 const SUBJECT_TOPICS: Record<string, { topics: string[]; statuses: string[]; confidences: string[] }> = {
   DSA: {
@@ -63,6 +61,15 @@ const GROUP_QUESTIONS: Record<string, string[]> = {
   DBMS: ["Explain B+ tree indexing vs hash indexing", "Design schema for an e-commerce order system"],
   OS: ["Explain process vs thread with real examples", "How does virtual memory work?"],
 };
+
+const DEMO_FEEDBACK = [
+  "Clear structure and good pacing. Slow down on the edge cases.",
+  "Strong fundamentals. Say your trade-offs out loud as you go.",
+  "Good answers, but go one level deeper on the why.",
+  "Confident delivery. Practise more follow-up questions.",
+];
+const DEMO_STRENGTHS = ["Clear communication", "Structured thinking", "Solid fundamentals"];
+const DEMO_WEAK_SPOTS = ["Depth on caching", "Edge cases", "Time complexity analysis", "Explaining trade-offs"];
 
 const MEMBER_NAMES = ["Alex Chen", "Priya Sharma", "Rahul Mehta"];
 const EXPECTED_GROUP_QUESTION_COUNT = Object.values(GROUP_QUESTIONS).reduce(
@@ -195,36 +202,53 @@ async function syncDemoMockInterviews(
     });
   }
 
-  // Round 1 — completed mocks for guest
-  const guestDoneIds = new Set(
-    (
-      await QuestionProgress.find({
-        userId: guestId,
-        status: "done",
-        questionId: { $in: questions.map((q) => q._id) },
-      }).lean()
-    ).map((p) => String(p.questionId))
-  );
-  const guestR1Questions = sessionQuestionsForUser(subjects, questions, guestDoneIds);
-  if (guestR1Questions.length > 0) {
-    const guestR1Session = await MockInterviewSession.create({
+  // Round 1: completed. Every member was interviewed by the other three, who each left a rubric,
+  // an overall score, written feedback and notes, so the feedback trend has something to show for everyone.
+  const questionIds = questions.map((q) => q._id);
+  const clampRating = (n: number) => Math.min(5, Math.max(1, n));
+  for (let t = 0; t < allMemberIds.length; t++) {
+    const intervieweeId = allMemberIds[t];
+    const doneIds = new Set(
+      (
+        await QuestionProgress.find({
+          userId: intervieweeId,
+          status: { $in: ["done", "revised"] },
+          questionId: { $in: questionIds },
+        }).lean()
+      ).map((pr) => String(pr.questionId))
+    );
+    const sessionQuestions = sessionQuestionsForUser(subjects, questions, doneIds);
+    if (sessionQuestions.length === 0) continue;
+
+    const session = await MockInterviewSession.create({
       groupId,
       roundId: round1._id,
-      intervieweeId: guestId,
-      generatedBy: memberIds[0] ?? guestId,
-      questions: guestR1Questions,
+      intervieweeId,
+      generatedBy: allMemberIds[(t + 1) % allMemberIds.length],
+      questions: sessionQuestions,
     });
-    for (let i = 0; i < memberIds.length; i++) {
+
+    const reviewers = allMemberIds.filter((_, i) => i !== t);
+    for (let j = 0; j < reviewers.length; j++) {
+      const rubric = {
+        communication: clampRating(3 + ((t + j) % 3)),
+        correctness: clampRating(2 + ((t * 2 + j) % 4)),
+        depth: clampRating(2 + ((t + j * 2) % 3)),
+        confidence: clampRating(3 + ((t * 3 + j) % 3)),
+      };
+      const average = (rubric.communication + rubric.correctness + rubric.depth + rubric.confidence) / 4;
       await MockInterview.create({
-        userId: guestId,
+        userId: intervieweeId,
         groupId,
-        sessionId: guestR1Session._id,
-        interviewerId: memberIds[i],
-        date: demoInterviewSlot(round1.startsAt, i + 1),
-        score: [72, 68, 75][i] ?? 70,
-        questionsAsked: guestR1Session.questions.map((q) => `${q.subjectName}: ${q.question}`),
-        strengths: ["Clear communication"],
-        weaknesses: ["Depth on caching"],
+        sessionId: session._id,
+        interviewerId: reviewers[j],
+        date: demoInterviewSlot(round1.startsAt, t),
+        score: Math.min(95, Math.max(40, Math.round(average * 20 + (j - 1) * 2))),
+        rubric,
+        questionsAsked: session.questions.map((q) => `${q.subjectName}: ${q.question}`),
+        strengths: [DEMO_STRENGTHS[(t + j) % DEMO_STRENGTHS.length]],
+        weaknesses: [DEMO_WEAK_SPOTS[(t * 2 + j) % DEMO_WEAK_SPOTS.length]],
+        feedback: DEMO_FEEDBACK[(t + j * 2) % DEMO_FEEDBACK.length],
       });
     }
   }
@@ -403,6 +427,13 @@ export async function ensureDemoData() {
       const memberIds = await ensureMemberUsers();
       const subjects = await Subject.find({ groupId: guest.activeGroupId, scope: "group" }).sort({ order: 1 });
       const questions = await PracticeQuestion.find({ groupId: guest.activeGroupId, scope: "group" });
+      // The demo group is seeded once but visited for months: keep its interview date ahead of us and the
+      // demo user's streak current, so the dashboard never shows a date that has passed or a 46-day break.
+      if (!group.interviewDate || group.interviewDate.getTime() < Date.now()) {
+        group.interviewDate = daysFromNow(45);
+        await group.save();
+      }
+      await User.updateOne({ _id: guest._id }, { studyStreak: 12, lastStudyDate: new Date() });
       await syncDemoSubjectInterviewFlags(subjects);
       await ensureMemberDoneQuestions([guest._id, ...memberIds], subjects, questions);
       await syncDemoMockInterviews(guest.activeGroupId, guest._id, memberIds, subjects, questions);
@@ -558,34 +589,6 @@ export async function ensureDemoData() {
     }
   }
 
-  const taskDefs = [
-    { title: "Revise DP patterns — knapsack & LCS", status: "in_progress", priority: "critical" },
-    { title: "Mock: System Design URL shortener", status: "pending", priority: "high" },
-    { title: "Solve 5 medium array problems", status: "completed", priority: "high" },
-    { title: "Read Grokking SD — Notification System", status: "pending", priority: "medium" },
-    { title: "Practice B+ tree vs hash index tradeoffs", status: "completed", priority: "medium" },
-    { title: "Review OS scheduling algorithms", status: "pending", priority: "low" },
-  ];
-
-  if (!resumePartialSeed) {
-    for (let i = 0; i < taskDefs.length; i++) {
-      const topic = allTopics[i % allTopics.length];
-      const subject = subjects.find((s) => String(s._id) === String(topic.subjectId));
-      await PrepTask.create({
-        groupId,
-        userId: guest._id,
-        subjectId: subject?._id,
-        topicId: topic._id,
-        title: taskDefs[i].title,
-        priority: taskDefs[i].priority,
-        status: taskDefs[i].status,
-        dueDate: daysFromNow(i < 3 ? 0 : i),
-        estimatedMinutes: 45,
-        completedAt: taskDefs[i].status === "completed" ? daysFromNow(-1) : undefined,
-      });
-    }
-  }
-
   const questions: InstanceType<typeof PracticeQuestion>[] = [];
   for (const subject of subjects) {
     const qs = GROUP_QUESTIONS[subject.name] ?? [];
@@ -635,36 +638,6 @@ export async function ensureDemoData() {
       completedAt: new Date(day.getTime() + minutes * 60000),
     });
   }
-
-  const planStart = startOfDay(new Date());
-  const planEnd = daysFromNow(14);
-  const planDays = [];
-  for (let d = 0; d < 7; d++) {
-    const date = addIstDays(planStart, d);
-    const subject = subjects[d % subjects.length];
-    const topic = allTopics.filter((t) => String(t.subjectId) === String(subject._id))[0];
-    planDays.push({
-      dayNumber: d + 1,
-      date,
-      items: [
-        {
-          subjectId: subject._id,
-          topicId: topic?._id,
-          label: `${subject.name}: ${topic?.name ?? "Review"}`,
-          estimatedMinutes: 90,
-          completed: d < 2,
-        },
-      ],
-    });
-  }
-
-  await PreparationPlan.create({
-    groupId,
-    userId: guest._id,
-    startDate: planStart,
-    endDate: planEnd,
-    days: planDays,
-  });
 
   for (const memberId of memberIds) {
     for (let i = 5; i >= 0; i--) {

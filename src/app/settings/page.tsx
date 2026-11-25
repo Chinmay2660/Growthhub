@@ -1,11 +1,18 @@
 "use client";
 
+import { useDocumentTitle } from "@/lib/use-document-title";
 import { useState, useEffect, useMemo } from "react";
+import Slider from "@/components/ui/Slider";
+import { Input } from "@/components/ui/Input";
 import {
   Check,
   Copy,
+  Download,
   KeyRound,
   LogOut,
+  ShieldCheck,
+  Trash2,
+  UserRound,
   Monitor,
   Moon,
   Sun,
@@ -13,7 +20,6 @@ import {
   Timer,
   type LucideIcon,
 } from "lucide-react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { useUser } from "@/components/providers/UserProvider";
@@ -22,13 +28,47 @@ import { useTheme } from "@/components/providers/ThemeProvider";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Chip from "@/components/ui/Chip";
+import Select from "@/components/ui/Select";
+import Label from "@/components/ui/Label";
+import Modal from "@/components/ui/Modal";
+import ModalFooter from "@/components/ui/ModalFooter";
 import PageHeader from "@/components/ui/PageHeader";
 import { SettingsPageSkeleton } from "@/components/ui/StateViews";
-import { apiPost, getErrorMessage } from "@/lib/api";
+import { ApiError, apiPost, getErrorMessage, resetLocalData } from "@/lib/api";
+import { clearOfflineCaches } from "@/lib/offline-cache";
 import { normalizeUser } from "@/lib/user";
 import toast from "react-hot-toast";
 import { pickCtcMotivation } from "@/lib/inspiration";
-import type { ThemePreference } from "@/types";
+import type { PreparationLevel, ThemePreference } from "@/types";
+
+const LEVEL_OPTIONS: { value: PreparationLevel; label: string }[] = [
+  { value: "beginner", label: "Beginner" },
+  { value: "intermediate", label: "Intermediate" },
+  { value: "advanced", label: "Advanced" },
+];
+
+type ProfileField = "name" | "email" | "preparationLevel" | "targetCompany" | "targetRole" | "dailyQuestionGoal";
+
+/** The API returns one message; attribute it to the field it is about so it can show under that field. */
+function fieldForError(message: string): ProfileField | null {
+  const m = message.toLowerCase();
+  if (m.includes("email")) return "email";
+  if (m.includes("question goal")) return "dailyQuestionGoal";
+  if (m.includes("preparation level")) return "preparationLevel";
+  if (m.includes("company")) return "targetCompany";
+  if (m.includes("role")) return "targetRole";
+  if (m.includes("name")) return "name";
+  return null;
+}
+
+function FieldError({ id, message }: { id: string; message?: string }) {
+  if (!message) return null;
+  return (
+    <p id={id} role="alert" className="mt-1 text-xs text-[var(--danger)]">
+      {message}
+    </p>
+  );
+}
 
 const THEMES: { value: ThemePreference; label: string; icon: typeof Sun }[] = [
   { value: "light", label: "Light", icon: Sun },
@@ -48,7 +88,7 @@ function SettingsGroup({
   children: React.ReactNode;
 }) {
   return (
-    <Card className="overflow-hidden !p-0">
+    <Card padding="none" className="overflow-hidden">
       <div className="border-b border-[var(--border)] px-5 py-4">
         <div className="flex items-start gap-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand">
@@ -80,7 +120,8 @@ function StatPill({ label, value }: { label: string; value: string }) {
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { user, loading, updateUser, logout } = useUser();
+  const { user, loading, updateUser, logout, setUser } = useUser();
+  useDocumentTitle("Settings");
   const confirm = useConfirm();
   const { theme, setTheme } = useTheme();
   const profile = user ? normalizeUser(user) : null;
@@ -90,12 +131,47 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
 
+  // Profile form (saved on its own, separate from the sticky "Save" bar below).
+  const [pName, setPName] = useState(profile?.name ?? "");
+  const [pEmail, setPEmail] = useState(profile?.email ?? "");
+  const [pLevel, setPLevel] = useState<PreparationLevel>(profile?.preparationLevel ?? "intermediate");
+  const [pCompany, setPCompany] = useState(profile?.targetCompany ?? "");
+  const [pRole, setPRole] = useState(profile?.targetRole ?? "");
+  const [pGoal, setPGoal] = useState(profile?.dailyQuestionGoal ?? 3);
+  const [profileErrors, setProfileErrors] = useState<Partial<Record<ProfileField, string>>>({});
+  const [profileSaving, setProfileSaving] = useState(false);
+
+  const [recoveryKey, setRecoveryKey] = useState<string | null>(null);
+  const [recoveryBusy, setRecoveryBusy] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteInput, setDeleteInput] = useState("");
+  const [deleting, setDeleting] = useState(false);
+
   useEffect(() => {
     if (!user) return;
     const p = normalizeUser(user);
     setDailyMinutes(p.dailyStudyMinutes);
     setTargetCtc(p.targetCtcLpa ?? 0);
+    setPName(p.name);
+    setPEmail(p.email ?? "");
+    setPLevel(p.preparationLevel);
+    setPCompany(p.targetCompany ?? "");
+    setPRole(p.targetRole ?? "");
+    setPGoal(p.dailyQuestionGoal);
   }, [user]);
+
+  const isGuest = Boolean(user?.isGuest);
+  const profileDirty =
+    !!profile &&
+    (pName.trim() !== profile.name ||
+      pEmail.trim() !== (profile.email ?? "") ||
+      pLevel !== profile.preparationLevel ||
+      pCompany.trim() !== (profile.targetCompany ?? "") ||
+      pRole.trim() !== (profile.targetRole ?? "") ||
+      pGoal !== profile.dailyQuestionGoal);
+  const deleteExpected = user?.username ?? "DELETE";
+  const deleteMatches = deleteInput.trim() === deleteExpected;
 
   const ctcPreview = useMemo(
     () => (targetCtc > 0 ? pickCtcMotivation(targetCtc) : null),
@@ -152,6 +228,128 @@ export default function SettingsPage() {
     }
   };
 
+  const saveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isGuest || !profile) return;
+    const errors: Partial<Record<ProfileField, string>> = {};
+    if (!pName.trim()) errors.name = "Name is required";
+    else if (pName.trim().length > 60) errors.name = "Name must be 60 characters or fewer";
+    const goal = Math.round(Number(pGoal));
+    if (!Number.isFinite(goal) || goal < 1 || goal > 50) errors.dailyQuestionGoal = "Enter a number from 1 to 50";
+    if (Object.keys(errors).length) {
+      setProfileErrors(errors);
+      toast.error("Please fix the highlighted fields");
+      return;
+    }
+    setProfileErrors({});
+    setProfileSaving(true);
+    try {
+      await updateUser({
+        name: pName.trim(),
+        email: pEmail.trim(),
+        preparationLevel: pLevel,
+        targetCompany: pCompany.trim(),
+        targetRole: pRole.trim(),
+        dailyQuestionGoal: goal,
+      });
+      toast.success("Profile saved");
+    } catch (err) {
+      const message = getErrorMessage(err, "Failed to save profile");
+      const field = err instanceof ApiError ? fieldForError(message) : null;
+      if (field) setProfileErrors({ [field]: message });
+      toast.error(message);
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
+  const createRecoveryKey = async () => {
+    if (isGuest) return;
+    setRecoveryBusy(true);
+    try {
+      const result = await apiPost<{ recoveryKey: string }>("/api/auth/recovery-key");
+      setRecoveryKey(result.recoveryKey);
+      toast.success("New recovery key created");
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Failed to create recovery key"));
+    } finally {
+      setRecoveryBusy(false);
+    }
+  };
+
+  const copyRecoveryKey = async () => {
+    if (!recoveryKey) return;
+    try {
+      await navigator.clipboard.writeText(recoveryKey);
+      toast.success("Recovery key copied");
+    } catch {
+      toast.error("Could not copy. Select the key and copy it manually.");
+    }
+  };
+
+  const downloadData = async () => {
+    if (isGuest || !user) return;
+    setExporting(true);
+    try {
+      const res = await fetch(`/api/users/${user._id}/export`, { credentials: "include", cache: "no-store" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `Export failed with status ${res.status}`);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `growthhub-export-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success("Your data was downloaded");
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Failed to download your data"));
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const closeDelete = () => {
+    if (deleting) return;
+    setDeleteOpen(false);
+    setDeleteInput("");
+  };
+
+  const deleteAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isGuest || !user || !deleteMatches || deleting) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/users/${user._id}`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(user.username ? { username: deleteInput.trim() } : { confirm: "DELETE" }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || body.success === false) {
+        throw new Error(body.error || `Deleting failed with status ${res.status}`);
+      }
+      await clearOfflineCaches();
+      await resetLocalData();
+      try {
+        localStorage.removeItem("growthhub-user");
+      } catch {
+        /* storage unavailable */
+      }
+      toast.success("Your account was deleted");
+      setUser(null);
+      router.push("/login");
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Failed to delete account"));
+      setDeleting(false);
+    }
+  };
+
   const copyCode = () => {
     if (!displayCode) return;
     navigator.clipboard.writeText(displayCode);
@@ -190,7 +388,7 @@ export default function SettingsPage() {
         description="Manage your account, goals, and how the app looks."
       />
 
-      <div className="relative overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5">
+      <div className="relative overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
         <div
           className="pointer-events-none absolute inset-0 bg-gradient-to-br from-brand/8 via-transparent to-transparent"
           aria-hidden
@@ -211,9 +409,7 @@ export default function SettingsPage() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-            <Link href={`/users/${user._id}`}>
-              <Button variant="outline" size="sm">View profile</Button>
-            </Link>
+            <Button href={`/users/${user._id}`} variant="outline" size="sm">View profile</Button>
             <Button
               variant="ghost"
               size="sm"
@@ -235,6 +431,115 @@ export default function SettingsPage() {
           />
         </div>
       </div>
+
+      <SettingsGroup
+        icon={UserRound}
+        title="Profile"
+        description="Your name and what you are preparing for."
+      >
+        {isGuest && (
+          <p className="mb-4 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2 text-sm text-[var(--muted)]">
+            This is the shared demo account — create your own account to edit your profile.
+          </p>
+        )}
+        <form onSubmit={saveProfile} className="space-y-4" noValidate>
+          <div>
+            <Label htmlFor="profile-name">Name</Label>
+            <Input
+              id="profile-name"
+              value={pName}
+              onChange={(e) => setPName(e.target.value)}
+              disabled={isGuest}
+              maxLength={60}
+              autoComplete="name"
+              aria-invalid={Boolean(profileErrors.name)}
+              aria-describedby={profileErrors.name ? "profile-name-error" : undefined}
+            />
+            <FieldError id="profile-name-error" message={profileErrors.name} />
+          </div>
+          <div>
+            <Label htmlFor="profile-email">Email (optional)</Label>
+            <Input
+              id="profile-email"
+              type="email"
+              value={pEmail}
+              onChange={(e) => setPEmail(e.target.value)}
+              disabled={isGuest}
+              maxLength={120}
+              autoComplete="email"
+              aria-invalid={Boolean(profileErrors.email)}
+              aria-describedby={profileErrors.email ? "profile-email-error" : undefined}
+            />
+            <FieldError id="profile-email-error" message={profileErrors.email} />
+          </div>
+          <div>
+            <Label htmlFor="profile-level">Preparation level</Label>
+            <Select
+              id="profile-level"
+              value={pLevel}
+              onChange={(v) => setPLevel(v as PreparationLevel)}
+              options={LEVEL_OPTIONS}
+              disabled={isGuest}
+              aria-label="Preparation level"
+            />
+            <FieldError id="profile-level-error" message={profileErrors.preparationLevel} />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <Label htmlFor="profile-company">Target company</Label>
+              <Input
+                id="profile-company"
+                value={pCompany}
+                onChange={(e) => setPCompany(e.target.value)}
+                disabled={isGuest}
+                maxLength={120}
+                placeholder="e.g. Acme Corp"
+                aria-invalid={Boolean(profileErrors.targetCompany)}
+                aria-describedby={profileErrors.targetCompany ? "profile-company-error" : undefined}
+              />
+              <FieldError id="profile-company-error" message={profileErrors.targetCompany} />
+            </div>
+            <div>
+              <Label htmlFor="profile-role">Target role</Label>
+              <Input
+                id="profile-role"
+                value={pRole}
+                onChange={(e) => setPRole(e.target.value)}
+                disabled={isGuest}
+                maxLength={120}
+                placeholder="e.g. Backend Engineer"
+                aria-invalid={Boolean(profileErrors.targetRole)}
+                aria-describedby={profileErrors.targetRole ? "profile-role-error" : undefined}
+              />
+              <FieldError id="profile-role-error" message={profileErrors.targetRole} />
+            </div>
+          </div>
+          <div>
+            <Label htmlFor="profile-goal">Daily question goal (1-50)</Label>
+            <Input
+              id="profile-goal"
+              type="number"
+              min={1}
+              max={50}
+              step={1}
+              value={Number.isFinite(pGoal) ? pGoal : ""}
+              onChange={(e) => setPGoal(e.target.value === "" ? NaN : Number(e.target.value))}
+              disabled={isGuest}
+              className="sm:!w-32"
+              aria-invalid={Boolean(profileErrors.dailyQuestionGoal)}
+              aria-describedby={profileErrors.dailyQuestionGoal ? "profile-goal-error" : undefined}
+            />
+            <FieldError id="profile-goal-error" message={profileErrors.dailyQuestionGoal} />
+          </div>
+          {!isGuest && (
+            <div className="flex justify-end">
+              <Button type="submit" size="sm" loading={profileSaving} disabled={!profileDirty}>
+                {profileSaving ? "Saving…" : "Save profile"}
+              </Button>
+            </div>
+          )}
+        </form>
+      </SettingsGroup>
 
       <SettingsGroup
         icon={KeyRound}
@@ -284,6 +589,7 @@ export default function SettingsPage() {
               <button
                 key={t.value}
                 type="button"
+                aria-pressed={active}
                 onClick={() => setTheme(t.value)}
                 className={clsx(
                   "flex flex-col items-center gap-2 rounded-xl border px-3 py-3 text-xs font-medium transition-colors",
@@ -318,30 +624,26 @@ export default function SettingsPage() {
           </div>
           <div className="flex gap-1.5">
             {[60, 120, 180, 240].map((m) => (
-              <button
+              <Chip
                 key={m}
-                type="button"
+                variant="brand"
+                active={dailyMinutes === m}
                 onClick={() => setDailyMinutes(m)}
-                className={clsx(
-                  "rounded-lg px-2.5 py-1 text-xs font-medium transition-colors",
-                  dailyMinutes === m
-                    ? "bg-brand text-white"
-                    : "bg-[var(--surface-muted)] text-[var(--muted)] hover:text-[var(--foreground)]"
-                )}
+                className="!rounded-lg font-medium"
               >
                 {m / 60}h
-              </button>
+              </Chip>
             ))}
           </div>
         </div>
-        <input
-          type="range"
+        <Slider
           min={30}
           max={480}
           step={15}
           value={dailyMinutes}
-          onChange={(e) => setDailyMinutes(Number(e.target.value))}
-          className="mt-4 w-full accent-brand"
+          onChange={setDailyMinutes}
+          aria-label="Daily study minutes"
+          className="mt-4"
         />
         <div className="mt-1 flex justify-between text-[10px] text-[var(--muted)]">
           <span>30m</span>
@@ -356,16 +658,16 @@ export default function SettingsPage() {
       >
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2 rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2">
-            <input
+            <Input
               type="number"
               min={0}
               max={200}
               step={0.5}
               value={targetCtc || ""}
               onChange={(e) => setTargetCtc(Number(e.target.value))}
-              onWheel={(e) => e.currentTarget.blur()}
               placeholder="25"
-              className="w-16 bg-transparent text-lg font-semibold outline-none"
+              aria-label="Target CTC in LPA"
+              className="!w-16 !border-0 !bg-transparent !p-0 text-lg font-semibold !shadow-none"
             />
             <span className="text-sm font-medium text-[var(--muted)]">LPA</span>
           </div>
@@ -381,6 +683,109 @@ export default function SettingsPage() {
           </blockquote>
         )}
       </SettingsGroup>
+
+      {!isGuest && (
+        <>
+          <SettingsGroup
+            icon={ShieldCheck}
+            title="Recovery key"
+            description="The only way back in if you forget your 6-digit code."
+          >
+            {recoveryKey ? (
+              <div className="rounded-xl border border-brand/30 bg-brand/5 p-4 text-center">
+                <p className="select-all break-all font-mono text-xl font-bold tracking-[0.15em] text-brand">
+                  {recoveryKey}
+                </p>
+                <p className="mt-2 text-xs text-[var(--muted)]">
+                  Save this now, it will not be shown again. Any earlier recovery key no longer works.
+                </p>
+                <div className="mt-3 flex justify-center gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={copyRecoveryKey}>
+                    <Copy className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+                    Copy key
+                  </Button>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setRecoveryKey(null)}>
+                    Done
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-[var(--muted)]">
+                  Create a recovery key, or replace the one you have. Replacing it makes the old key stop working.
+                </p>
+                <Button type="button" variant="outline" size="sm" onClick={createRecoveryKey} loading={recoveryBusy}>
+                  {recoveryBusy ? "Creating…" : "Create or replace recovery key"}
+                </Button>
+              </div>
+            )}
+          </SettingsGroup>
+
+          <SettingsGroup
+            icon={Download}
+            title="Your data"
+            description="Download a copy of everything GrowthHub stores about you."
+          >
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-[var(--muted)]">
+                A JSON file with your profile, groups, personal tracks, questions, progress and mock interview results.
+              </p>
+              <Button type="button" variant="outline" size="sm" onClick={downloadData} loading={exporting}>
+                <Download className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+                {exporting ? "Preparing…" : "Download my data"}
+              </Button>
+            </div>
+          </SettingsGroup>
+
+          <section
+            aria-labelledby="danger-zone-title"
+            className="rounded-xl border border-danger/40 bg-danger/5 p-5"
+          >
+            <h2 id="danger-zone-title" className="text-sm font-semibold text-[var(--danger)]">
+              Danger zone
+            </h2>
+            <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-[var(--muted)]">
+                Permanently delete your account and personal data. If you own a group with other members,
+                transfer ownership first. This cannot be undone.
+              </p>
+              <Button type="button" variant="dangerOutline" size="sm" onClick={() => setDeleteOpen(true)}>
+                <Trash2 className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+                Delete account
+              </Button>
+            </div>
+          </section>
+
+          <Modal open={deleteOpen} onClose={closeDelete} title="Delete account" size="sm">
+            <form onSubmit={deleteAccount} className="space-y-4">
+              <p className="text-sm text-[var(--muted)]">
+                This permanently deletes your profile, progress, personal tracks and questions, mock interview
+                results and notes. Groups you are the only member of are deleted too.
+              </p>
+              <div>
+                <Label htmlFor="delete-confirm">
+                  {user.username ? `Type your username (${user.username}) to confirm` : "Type DELETE to confirm"}
+                </Label>
+                <Input
+                  id="delete-confirm"
+                  value={deleteInput}
+                  onChange={(e) => setDeleteInput(e.target.value)}
+                  autoComplete="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  disabled={deleting}
+                  autoFocus
+                />
+              </div>
+              <ModalFooter className="!mt-4" onCancel={closeDelete} cancelDisabled={deleting}>
+                <Button type="submit" variant="danger" disabled={!deleteMatches} loading={deleting}>
+                  {deleting ? "Deleting…" : "Delete my account"}
+                </Button>
+              </ModalFooter>
+            </form>
+          </Modal>
+        </>
+      )}
 
       {!isDirty ? (
         <p className="flex items-center justify-center gap-1.5 text-xs text-[var(--muted)] sm:justify-start">

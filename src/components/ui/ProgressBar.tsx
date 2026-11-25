@@ -84,7 +84,12 @@ export function ProgressRing({ value, size = 120 }: { value: number; size?: numb
         />
       </svg>
       <div className="absolute text-center">
-        <div className="text-2xl font-bold text-[var(--foreground)]">{clamped}%</div>
+        <div
+          className="font-bold leading-none text-[var(--foreground)]"
+          style={{ fontSize: Math.max(12, Math.round(size * 0.22)) }}
+        >
+          {clamped}%
+        </div>
       </div>
     </div>
   );

@@ -1,15 +1,15 @@
 import { connectToDatabase } from "@/lib/mongodb";
 import { requireAuthUserId, unauthorized } from "@/lib/api-auth";
-import { jsonOk, jsonError, istDateKey } from "@/lib/utils";
+import { jsonOk, jsonError, istDateKey, currentStreak } from "@/lib/utils";
 import User from "@/models/User";
 import Group from "@/models/Group";
 import Subject from "@/models/Subject";
 import Topic from "@/models/Topic";
 import TopicProgress from "@/models/TopicProgress";
-import PrepTask from "@/models/PrepTask";
 import PracticeQuestion from "@/models/PracticeQuestion";
 import QuestionProgress from "@/models/QuestionProgress";
 import MockInterview from "@/models/MockInterview";
+import { isQuestionSolved } from "@/lib/question-gamification";
 import StudySession from "@/models/StudySession";
 import { getPrepInsights } from "@/lib/prep-insights";
 import { getInterviewCountdown } from "@/lib/readiness";
@@ -41,12 +41,11 @@ export async function GET(
       return jsonError("You can only view profiles of group members", 403);
     }
 
-    const primaryGroupId = target.activeGroupId
-      ? String(target.activeGroupId)
-      : sharedGroups[0] ? String(sharedGroups[0]._id) : null;
+    const sharedGroupIds = sharedGroups.map((g) => String(g._id));
+    const activeId = target.activeGroupId ? String(target.activeGroupId) : null;
+    const primaryGroupId =
+      activeId && sharedGroupIds.includes(activeId) ? activeId : (sharedGroupIds[0] ?? null);
 
-    let tasksCompleted = 0;
-    let tasksTotal = 0;
     let weakSubjects: string[] = [];
     let strongSubjects: string[] = [];
     let joinedAt: string | undefined;
@@ -71,11 +70,9 @@ export async function GET(
     let interview: { date: string; daysLeft: number } | null = null;
 
     if (primaryGroupId) {
-      // Independent lookups run together; tasks are counted by the database instead of loaded.
-      const [group, taskCount, completedTaskCount, groupSubjects, topics] = await Promise.all([
+      // Independent lookups run together.
+      const [group, groupSubjects, topics] = await Promise.all([
         Group.findById(primaryGroupId).lean(),
-        PrepTask.countDocuments({ userId: targetId, groupId: primaryGroupId }),
-        PrepTask.countDocuments({ userId: targetId, groupId: primaryGroupId, status: "completed" }),
         Subject.find({ groupId: primaryGroupId }).select("_id name").lean(),
         Topic.find({ groupId: primaryGroupId }).select("_id subjectId confidence").lean(),
       ]);
@@ -86,8 +83,6 @@ export async function GET(
         const c = getInterviewCountdown(group.interviewDate);
         interview = { date: new Date(group.interviewDate).toISOString(), daysLeft: c.isPast ? 0 : c.days };
       }
-      tasksCompleted = completedTaskCount;
-      tasksTotal = taskCount;
       const subjectsForScores = groupSubjects;
       const progress = await TopicProgress.find({
         userId: targetId,
@@ -151,7 +146,7 @@ export async function GET(
       stats = {
         questionsDone: subjects.reduce((n, s) => n + s.done, 0),
         questionsTotal: subjects.reduce((n, s) => n + s.total, 0),
-        points: progress.reduce((n, p) => n + (p.pointsAwarded ?? 0), 0),
+        points: progress.filter(isQuestionSolved).length,
         doneLast7Days: practised.filter(
           (p) => now - new Date(p.lastPracticed ?? p.updatedAt).getTime() <= 7 * DAY
         ).length,
@@ -193,10 +188,8 @@ export async function GET(
       username: target.username,
       name: target.name,
       preparationLevel: target.preparationLevel,
-      studyStreak: target.studyStreak,
+      studyStreak: currentStreak(target.studyStreak, target.lastStudyDate),
       dailyStudyMinutes: target.dailyStudyMinutes,
-      tasksCompleted,
-      tasksTotal,
       sharedGroups: sharedGroups.map((g) => ({ _id: String(g._id), name: g.name })),
       weakSubjects,
       strongSubjects,

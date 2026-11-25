@@ -5,7 +5,7 @@ import { useUser } from "@/components/providers/UserProvider";
 import { warmOfflineData } from "@/lib/offline-warmup";
 
 /** Pages worth having available offline from the first session. Others are cached as they're visited. */
-const PRECACHE = ["/dashboard", "/tasks", "/questions", "/subjects", "/topics", "/analytics", "/groups", "/settings"];
+const PRECACHE = ["/dashboard", "/questions", "/subjects", "/topics", "/analytics", "/groups", "/settings"];
 
 /**
  * Production: registers the offline app-shell worker and warms the main pages once signed in.

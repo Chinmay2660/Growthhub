@@ -1,7 +1,8 @@
 "use client";
 
 import clsx from "clsx";
-import { ButtonHTMLAttributes } from "react";
+import Link from "next/link";
+import { AnchorHTMLAttributes, ButtonHTMLAttributes, ReactNode } from "react";
 
 type Variant =
   | "primary"
@@ -36,34 +37,35 @@ const SIZE: Record<Size, string> = {
   lg: "px-6 py-3 text-base",
 };
 
-interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+type CommonProps = {
   variant?: Variant;
   size?: Size;
   /** Shows a circular spinner and disables the button. */
   loading?: boolean;
-}
+  className?: string;
+  children?: ReactNode;
+};
 
-export default function Button({
-  variant = "primary",
-  size = "md",
-  className,
-  children,
-  loading = false,
-  disabled,
-  ...props
-}: ButtonProps) {
-  return (
-    <button
-      className={clsx(
-        "inline-flex items-center justify-center gap-1.5 rounded-lg font-medium transition-all duration-150 focus-visible:outline-none",
-        VARIANT[variant],
-        SIZE[size],
-        className
-      )}
-      {...props}
-      disabled={disabled || loading}
-      aria-busy={loading || undefined}
-    >
+type ButtonAsButton = CommonProps &
+  Omit<ButtonHTMLAttributes<HTMLButtonElement>, keyof CommonProps> & { href?: undefined };
+
+/** With `href` the button renders as a Next.js link styled like the button (no nested interactive content). */
+type ButtonAsLink = CommonProps &
+  Omit<AnchorHTMLAttributes<HTMLAnchorElement>, keyof CommonProps | "href"> & {
+    href: string;
+    disabled?: boolean;
+  };
+
+export type ButtonProps = ButtonAsButton | ButtonAsLink;
+
+const BASE =
+  "inline-flex items-center justify-center gap-1.5 rounded-lg font-medium transition-all duration-150 focus-visible:outline-none";
+
+export default function Button(props: ButtonProps) {
+  const { variant = "primary", size = "md", className, children, loading = false, ...rest } = props;
+  const classes = clsx(BASE, VARIANT[variant], SIZE[size], className);
+  const content = (
+    <>
       {loading && (
         <span
           className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent"
@@ -71,6 +73,42 @@ export default function Button({
         />
       )}
       {children}
+    </>
+  );
+
+  if (typeof props.href === "string") {
+    const { href, disabled, onClick, ...anchorRest } = rest as Omit<ButtonAsLink, keyof CommonProps>;
+    const inactive = Boolean(disabled || loading);
+    return (
+      <Link
+        {...anchorRest}
+        href={href}
+        className={clsx(classes, inactive && "pointer-events-none opacity-50")}
+        aria-disabled={inactive || undefined}
+        aria-busy={loading || undefined}
+        tabIndex={inactive ? -1 : anchorRest.tabIndex}
+        onClick={(e) => {
+          if (inactive) {
+            e.preventDefault();
+            return;
+          }
+          onClick?.(e);
+        }}
+      >
+        {content}
+      </Link>
+    );
+  }
+
+  const { disabled, ...buttonRest } = rest as Omit<ButtonAsButton, keyof CommonProps>;
+  return (
+    <button
+      className={classes}
+      {...buttonRest}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
+    >
+      {content}
     </button>
   );
 }

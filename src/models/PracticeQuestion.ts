@@ -11,7 +11,7 @@ export interface IPracticeQuestion extends Document {
   content: string;
   link?: string;
   difficulty: "easy" | "medium" | "hard";
-  status: "not_started" | "add_to_todo" | "in_progress" | "revised" | "done";
+  status: "not_started" | "in_progress" | "revised" | "done";
   confidence: "weak" | "okay" | "strong";
   lastPracticed?: Date;
   firstCompletedAt?: Date;
@@ -35,7 +35,7 @@ const PracticeQuestionSchema = new Schema<IPracticeQuestion>(
     difficulty: { type: String, enum: ["easy", "medium", "hard"], default: "medium" },
     status: {
       type: String,
-      enum: ["not_started", "add_to_todo", "in_progress", "revised", "done"],
+      enum: ["not_started", "in_progress", "revised", "done"],
       default: "not_started",
     },
     confidence: { type: String, enum: ["weak", "okay", "strong"], default: "weak" },

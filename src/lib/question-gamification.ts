@@ -1,138 +1,71 @@
-import { addIstDays, istDateKey, startOfDay, normalizeQuestionStatus } from "@/lib/utils";
+import { addIstDays, istDateKey, normalizeQuestionStatus } from "@/lib/utils";
 import type { QuestionStatus } from "@/types";
 
-export const QUESTION_POINT_ON_TIME = 10;
-export const QUESTION_POINT_NEXT_DAY = 5;
-
-export type QuestionPointBucket = "perfect" | "good" | "zero" | "pending";
-
-export function daysAfterDue(practiceDate: Date | string, completedAt: Date | string): number {
-  const due = startOfDay(new Date(practiceDate)).getTime();
-  const done = startOfDay(new Date(completedAt)).getTime();
-  return Math.floor((done - due) / 86400000);
-}
-
-/** Due date +10, next day +5, then −1 per day until 0 (4, 3, 2, 1, 0). */
-export function pointsForDaysLate(daysLate: number): number {
-  if (daysLate <= 0) return QUESTION_POINT_ON_TIME;
-  if (daysLate === 1) return QUESTION_POINT_NEXT_DAY;
-  return Math.max(0, QUESTION_POINT_NEXT_DAY - (daysLate - 1));
-}
-
-export function pointsBucket(points: number): QuestionPointBucket {
-  if (points === QUESTION_POINT_ON_TIME) return "perfect";
-  if (points === QUESTION_POINT_NEXT_DAY) return "good";
-  return "zero";
-}
-
-/** Award points once on first transition to done (or revised); re-marking done does not re-score. */
-export function applyFirstDonePoints(
-  prevStatus: string,
-  nextStatus: string,
-  practiceDate: Date | string,
-  existing?: { pointsAwarded?: number | null; firstCompletedAt?: Date | string | null }
-): { pointsAwarded?: number; firstCompletedAt?: Date; pointsEarnedNow?: number } {
-  if (existing?.pointsAwarded != null) {
-    return {
-      pointsAwarded: existing.pointsAwarded,
-      firstCompletedAt: existing.firstCompletedAt
-        ? new Date(existing.firstCompletedAt)
-        : undefined,
-    };
-  }
-
-  const next = normalizeQuestionStatus(nextStatus);
-  // "revised" is a completed question too, so it earns the same one-time points as "done".
-  if (next !== "done" && next !== "revised") return {};
-
-  const completedAt = new Date();
-  const { points } = questionCompletionPoints("done", practiceDate, completedAt, completedAt);
-  const firstCompletedAt = existing?.firstCompletedAt
-    ? new Date(existing.firstCompletedAt)
-    : completedAt;
-
-  return {
-    pointsAwarded: points,
-    firstCompletedAt,
-    pointsEarnedNow: points,
-  };
-}
-
-export function questionCompletionPoints(
-  status: string,
-  practiceDate: Date | string,
-  lastPracticed?: Date | string | null,
-  now = new Date()
-): { points: number; bucket: QuestionPointBucket } {
-  const normalized = normalizeQuestionStatus(status);
-  const due = startOfDay(new Date(practiceDate));
-  const today = startOfDay(now);
-
-  if (normalized === "not_started" || normalized === "add_to_todo") {
-    if (today.getTime() > due.getTime()) return { points: 0, bucket: "zero" };
-    return { points: 0, bucket: "pending" };
-  }
-
-  if (!lastPracticed) return { points: 0, bucket: "zero" };
-
-  const daysLate = daysAfterDue(practiceDate, lastPracticed);
-  const points = pointsForDaysLate(daysLate);
-  if (points === QUESTION_POINT_ON_TIME) return { points, bucket: "perfect" };
-  if (points === QUESTION_POINT_NEXT_DAY) return { points, bucket: "good" };
-  return { points, bucket: "zero" };
-}
+/**
+ * Scoring is by questions solved: every solved question is worth the same, regardless of which
+ * day it was solved relative to its due date. A member's points equal their solved count.
+ */
+export const POINTS_PER_SOLVED_QUESTION = 1;
 
 export type QuestionGamificationInput = {
   _id: string;
-  practiceDate: Date | string;
+  practiceDate?: Date | string;
   createdAt?: Date | string;
   status: QuestionStatus | string;
   lastPracticed?: Date | string | null;
   firstCompletedAt?: Date | string | null;
+  /** Legacy: older rows stored a timing-based value here. It now only marks "was solved once". */
   pointsAwarded?: number | null;
 };
 
-function resolveAwardedPoints(
-  q: QuestionGamificationInput,
-  now = new Date()
-): { points: number; bucket: QuestionPointBucket; awardedAt?: Date } {
-  if (q.pointsAwarded != null) {
+/**
+ * A question counts as solved when it is done/revised, or was solved before (a stored award
+ * survives a later status change, so un-marking and re-marking can't be farmed for points).
+ */
+export function isQuestionSolved(q: {
+  status: QuestionStatus | string;
+  pointsAwarded?: number | null;
+}): boolean {
+  if (q.pointsAwarded != null) return true;
+  const status = normalizeQuestionStatus(q.status);
+  return status === "done" || status === "revised";
+}
+
+/** Award once, on the first transition to done (or revised); re-marking never re-scores. */
+export function applyFirstDonePoints(
+  _prevStatus: string,
+  nextStatus: string,
+  _practiceDate: Date | string,
+  existing?: { pointsAwarded?: number | null; firstCompletedAt?: Date | string | null }
+): { pointsAwarded?: number; firstCompletedAt?: Date; pointsEarnedNow?: number } {
+  // Already solved before (including legacy rows that stored a timing-based value): no new point.
+  if (existing?.pointsAwarded != null) {
     return {
-      points: q.pointsAwarded,
-      bucket: pointsBucket(q.pointsAwarded),
-      awardedAt: q.firstCompletedAt ? new Date(q.firstCompletedAt) : undefined,
+      pointsAwarded: existing.pointsAwarded,
+      firstCompletedAt: existing.firstCompletedAt ? new Date(existing.firstCompletedAt) : undefined,
     };
   }
 
-  const normalized = normalizeQuestionStatus(q.status);
-  if (normalized === "not_started" || normalized === "add_to_todo") {
-    if (!q.practiceDate) return { points: 0, bucket: "pending" };
-    const due = startOfDay(new Date(q.practiceDate));
-    if (startOfDay(now).getTime() > due.getTime()) return { points: 0, bucket: "zero" };
-    return { points: 0, bucket: "pending" };
-  }
+  const next = normalizeQuestionStatus(nextStatus);
+  // "revised" is a completed question too, so it earns the same one-time point as "done".
+  if (next !== "done" && next !== "revised") return {};
 
-  if ((normalized === "done" || normalized === "revised") && q.lastPracticed) {
-    const { points, bucket } = questionCompletionPoints(
-      q.status,
-      practiceDay(q),
-      q.lastPracticed,
-      now
-    );
-    return { points, bucket, awardedAt: new Date(q.lastPracticed) };
-  }
-
-  return { points: 0, bucket: "zero" };
+  const completedAt = new Date();
+  return {
+    pointsAwarded: POINTS_PER_SOLVED_QUESTION,
+    firstCompletedAt: existing?.firstCompletedAt ? new Date(existing.firstCompletedAt) : completedAt,
+    pointsEarnedNow: POINTS_PER_SOLVED_QUESTION,
+  };
 }
 
 export type MemberGamificationStat = {
   userId: string;
   name: string;
+  /** Questions solved (1 point each). */
   totalPoints: number;
-  perfect: number;
-  good: number;
-  zero: number;
+  /** Questions not solved yet. */
   pending: number;
+  /** Questions solved per day over the recent window. */
   dailyPoints: { date: string; points: number }[];
 };
 
@@ -141,10 +74,6 @@ export type GroupGamification = {
   dailyPoints: { date: string; label: string; points: number }[];
 };
 
-function practiceDay(q: { practiceDate?: Date | string }): Date {
-  return startOfDay(new Date(q.practiceDate ?? new Date()));
-}
-
 export function buildMemberGamification(
   userId: string,
   name: string,
@@ -152,10 +81,7 @@ export function buildMemberGamification(
   days = 7,
   now = new Date()
 ): MemberGamificationStat {
-  let totalPoints = 0;
-  let perfect = 0;
-  let good = 0;
-  let zero = 0;
+  let solved = 0;
   let pending = 0;
   const dailyMap = new Map<string, number>();
 
@@ -164,32 +90,25 @@ export function buildMemberGamification(
   }
 
   for (const q of questions) {
-    const { points, bucket, awardedAt } = resolveAwardedPoints(q, now);
-    totalPoints += points;
-    if (bucket === "perfect") perfect++;
-    else if (bucket === "good") good++;
-    else if (bucket === "zero") zero++;
-    else pending++;
-
-    if (points > 0 && awardedAt) {
-      const key = istDateKey(awardedAt);
-      if (dailyMap.has(key)) {
-        dailyMap.set(key, (dailyMap.get(key) ?? 0) + points);
-      }
+    if (!isQuestionSolved(q)) {
+      pending++;
+      continue;
+    }
+    solved++;
+    // The day a question was first solved, used only for the per-day chart.
+    const solvedAt = q.firstCompletedAt ?? q.lastPracticed;
+    if (solvedAt) {
+      const key = istDateKey(new Date(solvedAt));
+      if (dailyMap.has(key)) dailyMap.set(key, (dailyMap.get(key) ?? 0) + POINTS_PER_SOLVED_QUESTION);
     }
   }
-
-  const dailyPoints = Array.from(dailyMap.entries()).map(([date, points]) => ({ date, points }));
 
   return {
     userId,
     name,
-    totalPoints,
-    perfect,
-    good,
-    zero,
+    totalPoints: solved * POINTS_PER_SOLVED_QUESTION,
     pending,
-    dailyPoints,
+    dailyPoints: Array.from(dailyMap.entries()).map(([date, points]) => ({ date, points })),
   };
 }
 
@@ -220,10 +139,10 @@ export function buildGroupGamification(
     points,
   }));
 
-  const leaderboard = [...members].sort((a, b) => b.totalPoints - a.totalPoints);
+  // Most questions solved first; ties keep a stable alphabetical order.
+  const leaderboard = [...members].sort(
+    (a, b) => b.totalPoints - a.totalPoints || a.name.localeCompare(b.name)
+  );
 
-  return {
-    leaderboard,
-    dailyPoints,
-  };
+  return { leaderboard, dailyPoints };
 }

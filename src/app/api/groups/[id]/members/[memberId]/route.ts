@@ -1,7 +1,7 @@
 import { connectToDatabase } from "@/lib/mongodb";
 import { requireAuthUserId, unauthorized } from "@/lib/api-auth";
 import { jsonOk, jsonError } from "@/lib/utils";
-import { invalidateGroupInsights, isGroupMember, serializeDoc } from "@/lib/services";
+import { invalidateGroupInsights, isGroupMember, resolveActiveGroupId, serializeDoc } from "@/lib/services";
 import { canPromoteToCoAdmin, canRemoveGroupMember } from "@/lib/group-roles";
 import type { GroupRole } from "@/types";
 import Group from "@/models/Group";
@@ -82,10 +82,10 @@ export async function DELETE(
     await group.save();
     invalidateGroupInsights(id);
 
-    const memberUser = await User.findById(memberId);
+    // If that was their active group, move them to another group they're still in (or clear it).
+    const memberUser = await User.findById(memberId).select("activeGroupId").lean();
     if (memberUser && String(memberUser.activeGroupId) === id) {
-      memberUser.activeGroupId = undefined;
-      await memberUser.save();
+      await resolveActiveGroupId(memberId, id);
     }
 
     return jsonOk(serializeDoc(group));

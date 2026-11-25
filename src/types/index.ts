@@ -4,10 +4,8 @@ export type GroupRole = "owner" | "admin" | "member";
 export type Priority = "critical" | "high" | "medium" | "low";
 export type TopicStatus = "not_started" | "learning" | "practiced" | "revised";
 export type Confidence = "weak" | "okay" | "strong";
-export type TaskStatus = "pending" | "in_progress" | "completed";
 export type QuestionStatus =
   | "not_started"
-  | "add_to_todo"
   | "in_progress"
   | "revised"
   | "done";
@@ -25,6 +23,7 @@ export interface User {
   onboardingComplete: boolean;
   preparationLevel: PreparationLevel;
   dailyStudyMinutes: number;
+  dailyQuestionGoal: number;
   activeGroupId?: string;
   theme: ThemePreference;
   studyStreak: number;
@@ -50,6 +49,8 @@ export interface Group {
   joinCode: string;
   joinCodeExpiresAt: string;
   interviewDate?: string;
+  /** Questions each member aims to solve per week. */
+  weeklyGoalPerMember?: number;
   ownerId: string;
   members: GroupMember[];
   createdAt: string;
@@ -107,31 +108,12 @@ export interface TopicProgress {
   updatedAt: string;
 }
 
-export interface PrepTask {
-  _id: string;
-  groupId: string;
-  userId: string;
-  questionId?: string;
-  subjectId?: string;
-  topicId?: string;
-  title: string;
-  description?: string;
-  priority: Priority;
-  status: TaskStatus;
-  dueDate?: string;
-  estimatedMinutes: number;
-  completedAt?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
 export interface StudySession {
   _id: string;
   userId: string;
   groupId?: string;
   subjectId?: string;
   topicId?: string;
-  taskId?: string;
   durationMinutes: number;
   startedAt: string;
   completedAt: string;
@@ -151,7 +133,7 @@ export interface MockInterviewScore {
   interviewerId?: string;
   interviewerName?: string;
   score: number;
-  weaknesses: string[];
+  weaknesses?: string[];
   feedback?: string;
   rubric?: { communication: number; correctness: number; depth: number; confidence: number };
 }
@@ -269,17 +251,6 @@ export interface PlanDay {
   items: PlanDayItem[];
 }
 
-export interface PreparationPlan {
-  _id: string;
-  groupId: string;
-  userId: string;
-  startDate: string;
-  endDate: string;
-  days: PlanDay[];
-  createdAt: string;
-  updatedAt: string;
-}
-
 // Enriched types for API responses
 export interface SubjectWithStats extends Subject {
   topicCount: number;
@@ -310,17 +281,16 @@ export interface MemberStat {
   userId: string;
   username?: string;
   name: string;
-  tasksCompleted: number;
+  questionsSolved: number;
   role?: GroupRole;
 }
 
 export interface MemberGamificationStat {
   userId: string;
   name: string;
+  /** Questions solved (1 point each). */
   totalPoints: number;
-  perfect: number;
-  good: number;
-  zero: number;
+  /** Questions not solved yet. */
   pending: number;
   dailyPoints: { date: string; points: number }[];
 }
@@ -337,8 +307,6 @@ export interface UserProfile {
   preparationLevel: PreparationLevel;
   studyStreak: number;
   dailyStudyMinutes: number;
-  tasksCompleted: number;
-  tasksTotal: number;
   sharedGroups: { _id: string; name: string }[];
   weakSubjects: string[];
   strongSubjects: string[];
@@ -371,6 +339,9 @@ export interface TodayQuestion {
   _id: string;
   content: string;
   scope: ContentScope;
+  /** Which group a shared question belongs to (shared questions only). */
+  groupId?: string;
+  groupName?: string;
   subjectName: string;
   trackLabel: string;
   status: QuestionStatus;
@@ -379,13 +350,22 @@ export interface TodayQuestion {
 }
 
 export interface DashboardData {
-  countdown: { days: number; hours: number; totalHours: number; interviewDate: string | null };
+  countdown: { days: number; hours: number; totalHours: number; interviewDate: string | null; isPast?: boolean };
   todayQuestions: { group: TodayQuestion[]; personal: TodayQuestion[] };
-  weakSubjects: SubjectWithStats[];
-  memberStats?: MemberStat[];
-  upcomingDeadlines: { label: string; date: string; priority: Priority }[];
   studyStreak: number;
-  questionsToday: number;
+  /** Today's progress against the person's own daily goal. */
+  daily: { goal: number; solvedToday: number };
+  /** Set when the person has been away for a few days: what changed while they were gone. */
+  away: { days: number; overdue: number; teamSolved: number } | null;
+  /** Questions that were scheduled before today and are not solved yet (oldest first, up to 5). */
+  overdue: {
+    count: number;
+    items: { _id: string; title: string; subjectName: string; practiceDate: string; scope: ContentScope }[];
+  };
+  /** Every group the person belongs to (the dashboard covers all of them). */
+  groups: { _id: string; name: string }[];
+  /** The next scheduled mock across all groups, if any. */
+  nextMock: { roundNumber: number; date: string; groupId: string; groupName: string } | null;
 }
 
 export interface AnalyticsQuestionStatusRow {
@@ -420,8 +400,6 @@ export interface AnalyticsData {
       done: number;
       inProgress: number;
       studyMinutesWeek: number;
-      tasksCompleted: number;
-      tasksTotal: number;
       studyStreak: number;
     };
     byStatus: AnalyticsQuestionStatusRow[];

@@ -6,6 +6,7 @@ import toast from "react-hot-toast";
 import Button from "@/components/ui/Button";
 
 const HOUR = 3_600_000;
+const MAX_TIMER_MS = 2 ** 31 - 1;
 const STORAGE_KEY = "mock-reminders-enabled";
 
 /** Opens Google Calendar's "new event" screen prefilled with the mock time. */
@@ -43,14 +44,19 @@ export default function MockScheduleActions({ mockDate }: { mockDate?: string | 
     if (!enabled || !mockDate) return;
     const start = new Date(mockDate).getTime();
     if (start < Date.now()) return;
-    timer.current = setTimeout(
-      () => {
-        new Notification("Mock interview soon", {
-          body: `Your group mock starts at ${new Date(start).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.`,
-        });
-      },
-      Math.max(0, start - HOUR - Date.now())
-    );
+    const delay = start - HOUR - Date.now();
+    // Not yet inside the last hour: wait for it. Browser timers overflow past ~24.8 days (they would fire at
+    // once), so a far-off mock waits until a later visit. Already inside the hour: no pop-up on every page view.
+    if (delay <= 0 || delay > MAX_TIMER_MS) return;
+    timer.current = setTimeout(() => {
+      new Notification("Mock interview soon", {
+        body: `Your group mock starts at ${new Date(start).toLocaleTimeString("en-IN", {
+          hour: "2-digit",
+          minute: "2-digit",
+          timeZone: "Asia/Kolkata",
+        })} IST.`,
+      });
+    }, delay);
     return () => {
       if (timer.current) clearTimeout(timer.current);
     };
@@ -82,7 +88,7 @@ export default function MockScheduleActions({ mockDate }: { mockDate?: string | 
     } catch {
       /* storage unavailable */
     }
-    toast.success("You'll get a reminder 1 hour before (keep this tab open)");
+    toast.success("You'll get a reminder 1 hour before, while this page is open");
   };
 
   if (!mockDate) return null;

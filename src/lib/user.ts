@@ -1,4 +1,5 @@
 import type { User } from "@/types";
+import { currentStreak } from "@/lib/utils";
 
 /** Apply GrowthHub defaults for fields missing on shared-platform users (e.g. CareerFlow). */
 export function normalizeUser(doc: unknown): User {
@@ -17,9 +18,10 @@ export function normalizeUser(doc: unknown): User {
     onboardingComplete: u.onboardingComplete ?? false,
     preparationLevel: u.preparationLevel ?? "intermediate",
     dailyStudyMinutes: u.dailyStudyMinutes ?? 120,
+    dailyQuestionGoal: u.dailyQuestionGoal ?? 3,
     activeGroupId: u.activeGroupId,
     theme: u.theme ?? "system",
-    studyStreak: u.studyStreak ?? 0,
+    studyStreak: currentStreak(u.studyStreak, u.lastStudyDate),
     lastStudyDate: u.lastStudyDate,
     targetCtcLpa: u.targetCtcLpa,
     targetCompany: u.targetCompany,

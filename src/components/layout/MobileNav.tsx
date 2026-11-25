@@ -1,21 +1,25 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
 import { ExternalLink, Menu, X } from "lucide-react";
 import { useUser } from "@/components/providers/UserProvider";
 import { openCareerFlow } from "@/lib/apps-client";
+import { useUnreadNotes } from "@/lib/use-unread-notes";
 import { buildMobileNav, buildMobileMoreNav, isExternalNavItem, isNavItemActive } from "./nav-config";
 
 export default function MobileNav() {
   const pathname = usePathname();
   const { user } = useUser();
   const nav = buildMobileNav(user?.activeGroupId);
+  const unread = useUnreadNotes(user?.activeGroupId);
   const moreNav = buildMobileMoreNav(user?.activeGroupId);
   const [moreOpen, setMoreOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const moreButtonRef = useRef<HTMLButtonElement>(null);
+  const menuId = useId();
 
   useEffect(() => {
     setMoreOpen(false);
@@ -28,8 +32,18 @@ export default function MobileNav() {
         setMoreOpen(false);
       }
     }
+    function handleKey(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setMoreOpen(false);
+        moreButtonRef.current?.focus();
+      }
+    }
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKey);
+    };
   }, [moreOpen]);
 
   const moreActive = moreNav.some(
@@ -37,10 +51,11 @@ export default function MobileNav() {
   );
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--border)] bg-[var(--card)]/95 backdrop-blur-lg lg:hidden">
+    <nav aria-label="Mobile" className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--border)] bg-[var(--card)]/95 backdrop-blur-lg lg:hidden">
       {moreOpen && (
         <div
           ref={menuRef}
+          id={menuId}
           className="absolute inset-x-2 bottom-[calc(100%+0.5rem)] rounded-xl border border-[var(--border)] bg-[var(--card)] p-2 shadow-panel"
         >
           <div className="grid grid-cols-3 gap-1">
@@ -78,7 +93,12 @@ export default function MobileNav() {
               }
 
               return (
-                <Link key={item.id} href={item.href} className={itemClassName}>
+                <Link
+                  key={item.id}
+                  href={item.href}
+                  className={itemClassName}
+                  aria-current={active ? "page" : undefined}
+                >
                   <Icon className="h-5 w-5" strokeWidth={active ? 2.25 : 1.75} />
                   {item.label}
                 </Link>
@@ -117,13 +137,29 @@ export default function MobileNav() {
           }
 
           return (
-            <Link key={item.id} href={item.href} className={className}>
-              <Icon className="h-5 w-5" strokeWidth={active ? 2.25 : 1.75} />
+            <Link
+              key={item.id}
+              href={item.href}
+              className={className}
+              aria-current={active ? "page" : undefined}
+            >
+              <span className="relative">
+                <Icon className="h-5 w-5" strokeWidth={active ? 2.25 : 1.75} />
+                {item.id === "dashboard" && unread > 0 && (
+                  <span
+                    className="absolute -right-2 -top-1.5 min-w-[1rem] rounded-full bg-brand px-1 text-center text-[9px] font-semibold leading-4 text-white"
+                    aria-label={`${unread} unread note${unread === 1 ? "" : "s"}`}
+                  >
+                    {unread}
+                  </span>
+                )}
+              </span>
               {item.shortLabel ?? item.label}
             </Link>
           );
         })}
         <button
+          ref={moreButtonRef}
           type="button"
           onClick={() => setMoreOpen((open) => !open)}
           className={clsx(
@@ -131,6 +167,7 @@ export default function MobileNav() {
             moreOpen || moreActive ? "text-brand" : "text-[var(--muted)]"
           )}
           aria-expanded={moreOpen}
+          aria-controls={moreOpen ? menuId : undefined}
           aria-label="More navigation options"
         >
           {moreOpen ? (

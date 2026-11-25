@@ -7,6 +7,8 @@ export interface ITopicProgress extends Document {
   confidence: "weak" | "okay" | "strong";
   studyMinutes: number;
   lastStudied?: Date;
+  /** When this person should revise the topic again (set per person, never shared). */
+  nextRevision?: Date;
   notes?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -24,6 +26,7 @@ const TopicProgressSchema = new Schema<ITopicProgress>(
     confidence: { type: String, enum: ["weak", "okay", "strong"], default: "weak" },
     studyMinutes: { type: Number, default: 0 },
     lastStudied: { type: Date },
+    nextRevision: { type: Date },
     notes: { type: String, trim: true },
   },
   { timestamps: true }

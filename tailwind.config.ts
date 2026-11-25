@@ -14,8 +14,8 @@ const config: Config = {
       },
       colors: {
         brand: {
-          DEFAULT: "#C45C26",
-          hover: "#A84D1F",
+          DEFAULT: "#A84D1F",
+          hover: "#8F4118",
           light: "#F0E4DA",
           muted: "#8B6F5C",
           sage: "#3D6B59",

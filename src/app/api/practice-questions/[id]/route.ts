@@ -15,11 +15,10 @@ import {
   isGroupMember,
   canManageGroup,
   invalidateGroupInsights,
-  syncQuestionTodoTask,
+  updateStudyStreak,
 } from "@/lib/services";
 import PracticeQuestion from "@/models/PracticeQuestion";
 import QuestionProgress from "@/models/QuestionProgress";
-import PrepTask from "@/models/PrepTask";
 import Subject from "@/models/Subject";
 import Group from "@/models/Group";
 
@@ -76,7 +75,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       ).lean();
 
       if (progress) {
-        const status = normalizeQuestionStatus(progress.status);
         if (question.scope === "personal") {
           await PracticeQuestion.findByIdAndUpdate(id, {
             status: progress.status,
@@ -89,8 +87,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
               : {}),
           });
         }
-        await syncQuestionTodoTask(userId, question, status);
       }
+
+      // Practising or solving a question counts as a study day.
+      if (nextStatus && isQuestionStatusPracticed(nextStatus)) await updateStudyStreak(userId);
 
       invalidateGroupInsights(String(question.groupId));
 
@@ -178,7 +178,6 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     if (!canDelete) return jsonError("Not authorized to delete this question", 403);
 
     await QuestionProgress.deleteMany({ questionId: id });
-    await PrepTask.deleteMany({ questionId: id });
     await PracticeQuestion.deleteMany({ sourceGroupQuestionId: id, scope: "personal" });
     await PracticeQuestion.findByIdAndDelete(id);
     return jsonOk({ deleted: true });

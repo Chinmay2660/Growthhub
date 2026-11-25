@@ -14,6 +14,7 @@ import {
 } from "@/lib/utils";
 import User from "@/models/User";
 import Group from "@/models/Group";
+import Subject from "@/models/Subject";
 
 export async function POST(request: Request) {
   try {
@@ -74,6 +75,24 @@ export async function POST(request: Request) {
 
       if (subjects?.length) {
         await seedGroupSubjects(String(group._id), subjects);
+      }
+    }
+
+    if (groupAction === "join" && joinCode && Array.isArray(subjects) && subjects.length) {
+      // Joining keeps the typed subjects as personal tracks (the group already has its own).
+      const seen = new Set<string>();
+      const names = subjects
+        .filter((s: unknown): s is string => typeof s === "string")
+        .map((s: string) => s.trim().slice(0, 80))
+        .filter((s: string) => s && !seen.has(s.toLowerCase()) && seen.add(s.toLowerCase()));
+      for (let i = 0; i < names.length; i++) {
+        await Subject.create({
+          userId: user._id,
+          scope: "personal",
+          name: names[i],
+          priority: i < 2 ? "high" : "medium",
+          order: i,
+        });
       }
     }
 

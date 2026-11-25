@@ -11,8 +11,9 @@ import {
 } from "react";
 import type { User } from "@/types";
 import toast from "react-hot-toast";
-import { ApiError, apiGet, apiPatch, apiPost, flushOutbox, pendingWriteCount, resetLocalData, setLocalUser } from "@/lib/api";
+import { ApiError, UNAUTHORIZED_EVENT, apiGet, apiPatch, apiPost, flushOutbox, pendingWriteCount, resetLocalData, setLocalUser } from "@/lib/api";
 import { clearOfflineCaches } from "@/lib/offline-cache";
+import { useConfirm } from "@/components/providers/ConfirmProvider";
 import { normalizeUser } from "@/lib/user";
 
 interface UserContextValue {
@@ -107,6 +108,15 @@ export function UserProvider({ children }: { children: ReactNode }) {
     };
   }, [signedIn]);
 
+  // Any request answered with 401 means the session ended (expired or revoked): re-check it, which
+  // signs the person out and sends them to the login page.
+  useEffect(() => {
+    if (!signedIn) return;
+    const onUnauthorized = () => void refreshUser();
+    window.addEventListener(UNAUTHORIZED_EVENT, onUnauthorized);
+    return () => window.removeEventListener(UNAUTHORIZED_EVENT, onUnauthorized);
+  }, [signedIn, refreshUser]);
+
   // Replay writes made offline as soon as the connection returns.
   useEffect(() => {
     if (!signedIn) return;
@@ -136,14 +146,18 @@ export function UserProvider({ children }: { children: ReactNode }) {
     saveStoredUser(next);
   }, [user]);
 
+  const confirm = useConfirm();
   const logout = useCallback(async () => {
     // Try to sync first; logging out wipes the outbox, so warn if changes would be lost.
     await flushOutbox();
     const pending = await pendingWriteCount();
     if (pending > 0) {
-      const proceed = window.confirm(
-        `${pending} change${pending === 1 ? " has" : "s have"} not synced to the server yet. Logging out will discard ${pending === 1 ? "it" : "them"}. Log out anyway?`
-      );
+      const proceed = await confirm({
+        title: "Unsynced changes",
+        message: `${pending} change${pending === 1 ? " has" : "s have"} not synced to the server yet. Logging out will discard ${pending === 1 ? "it" : "them"}. Log out anyway?`,
+        confirmLabel: "Log out anyway",
+        variant: "danger",
+      });
       if (!proceed) return false;
     }
     await apiPost("/api/auth/logout");
@@ -152,7 +166,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     await resetLocalData(); // never leave one user's cached data on a shared browser
     setUser(null);
     return true;
-  }, []);
+  }, [confirm]);
 
   const value = useMemo(
     () => ({ user, loading, setUser, refreshUser, updateUser, logout }),

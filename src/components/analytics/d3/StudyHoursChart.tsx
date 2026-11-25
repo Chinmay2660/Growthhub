@@ -11,6 +11,8 @@ interface StudyHoursChartProps {
   color?: string;
   /** Tooltip suffix, e.g. "done" or "pts" */
   valueSuffix?: string;
+  /** Plain-text description for screen readers. */
+  ariaLabel?: string;
 }
 
 const MARGIN_BASE = { top: 12, right: 8, bottom: 28, left: 36 };
@@ -71,6 +73,7 @@ export default function StudyHoursChart({
   data,
   color = "#25A6EE",
   valueSuffix = "h studied",
+  ariaLabel,
 }: StudyHoursChartProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
@@ -212,7 +215,7 @@ export default function StudyHoursChart({
           No completions in the last {data.length} days — bars show the timeline.
         </p>
       ) : null}
-      <svg ref={svgRef} className="h-full w-full" />
+      <svg ref={svgRef} className="h-full w-full" role="img" aria-label={ariaLabel ?? "Bar chart"} />
       <div
         ref={tooltipRef}
         className="pointer-events-none absolute z-10 rounded-lg border border-[var(--border)] bg-[var(--card)] px-2.5 py-1.5 text-xs shadow-md"

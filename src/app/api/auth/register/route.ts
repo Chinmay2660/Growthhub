@@ -1,6 +1,7 @@
 import { connectToDatabase } from "@/lib/mongodb";
 import {
   hashAuthCode,
+  isReservedDemoUsername,
   isValidAuthCode,
   isValidUsername,
   normalizeUsername,
@@ -9,6 +10,7 @@ import { buildSessionCookie } from "@/lib/session";
 import { jsonOk, jsonError } from "@/lib/utils";
 import { normalizeUser } from "@/lib/user";
 import { checkAuthRateLimit } from "@/lib/auth-rate-limit";
+import { generateRecoveryKey, hashRecoveryKey } from "@/lib/recovery-key";
 import User from "@/models/User";
 
 export async function POST(request: Request) {
@@ -33,20 +35,22 @@ export async function POST(request: Request) {
       return jsonError("Code must be exactly 6 digits");
     }
 
-    const existing = await User.findOne({ username });
+    const existing = isReservedDemoUsername(username) ? true : await User.findOne({ username });
     if (existing) {
       return jsonError("Username already taken", 409);
     }
 
+    const recoveryKey = generateRecoveryKey();
     const user = await User.create({
       username,
       authCodeHash: hashAuthCode(authCode),
+      recoveryKeyHash: hashRecoveryKey(recoveryKey),
       name: name.trim(),
       onboardingComplete: false,
     });
 
     const response = jsonOk(
-      { user: normalizeUser(user), authCode },
+      { user: normalizeUser(user), authCode, recoveryKey },
       201
     );
     response.headers.set("Set-Cookie", await buildSessionCookie(String(user._id)));

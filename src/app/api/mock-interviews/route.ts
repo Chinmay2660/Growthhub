@@ -1,11 +1,11 @@
 import { withAuth } from "@/lib/api-handler";
 import { isDuplicateKeyError } from "@/lib/db-indexes";
 import { jsonOk, jsonError } from "@/lib/utils";
-import { serializeDoc, isGroupMember } from "@/lib/services";
+import { serializeDoc, isGroupMember, invalidateGroupInsights } from "@/lib/services";
+import { isObjectId } from "@/lib/access";
 import MockInterview from "@/models/MockInterview";
 import MockInterviewSession from "@/models/MockInterviewSession";
 import Subject from "@/models/Subject";
-import Topic from "@/models/Topic";
 import TopicProgress from "@/models/TopicProgress";
 import Group from "@/models/Group";
 import User from "@/models/User";
@@ -44,81 +44,79 @@ export const GET = withAuth(async (request, { userId }) => {
   );
 }, "Failed to fetch interviews");
 
-export const POST = withAuth(async (request, { userId: authUserId }) => {
-  const body = await request.json();
-  const {
-    sessionId,
-    intervieweeId,
-    groupId,
-    date,
-    subjectId,
-    score,
-    questionsAsked,
-    strengths,
-    weaknesses,
-    feedback,
-    rubric,
-    followUpTopicIds,
-  } = body;
+/** Scores under this mark queue the session's topics for revision. */
+const NEEDS_REVISION_BELOW = 70;
+const MAX_LIST_ITEMS = 10;
 
-  if (!sessionId) {
-    return jsonError("sessionId is required");
-  }
-  if (score === undefined) {
+function cleanList(input: unknown): string[] {
+  if (!Array.isArray(input)) return [];
+  return input
+    .filter((v): v is string => typeof v === "string")
+    .map((v) => v.trim().slice(0, 80))
+    .filter(Boolean)
+    .slice(0, MAX_LIST_ITEMS);
+}
+
+export const POST = withAuth(async (request, { userId: authUserId }) => {
+  const body = await request.json().catch(() => ({}));
+  const { sessionId, score, strengths, weaknesses, feedback, rubric } = body;
+
+  if (!isObjectId(sessionId)) return jsonError("sessionId is required");
+  if (score === undefined || score === null || (typeof score === "string" && !score.trim())) {
     return jsonError("score is required");
+  }
+  const scoreNum = Number(score);
+  if (!Number.isFinite(scoreNum) || scoreNum < 0 || scoreNum > 100) {
+    return jsonError("Score must be a number from 0 to 100");
+  }
+  if (feedback !== undefined && (typeof feedback !== "string" || feedback.length > 2000)) {
+    return jsonError("Feedback must be text under 2000 characters");
   }
 
   const session = await MockInterviewSession.findById(sessionId).lean();
   if (!session) return jsonError("Mock session not found", 404);
 
-  const resolvedGroupId = groupId ?? String(session.groupId);
-  const resolvedIntervieweeId = intervieweeId ?? String(session.intervieweeId);
+  // Everything that identifies the mock comes from the stored session, never from the request body.
+  const groupId = String(session.groupId);
+  const intervieweeId = String(session.intervieweeId);
 
-  const group = await Group.findById(resolvedGroupId).lean();
+  const group = await Group.findById(groupId).lean();
   if (!group || !isGroupMember(group, authUserId)) {
     return jsonError("Not a member of this group", 403);
   }
-  if (!group.members.some((m) => String(m.userId) === resolvedIntervieweeId)) {
-    return jsonError("Interviewee is not a group member", 400);
+  if (!group.members.some((m) => String(m.userId) === intervieweeId)) {
+    return jsonError("Interviewee is no longer a group member", 400);
   }
-  if (String(resolvedIntervieweeId) === authUserId) {
+  if (intervieweeId === authUserId) {
     return jsonError("Interviewee cannot score their own mock", 400);
   }
-  if (String(session.intervieweeId) !== resolvedIntervieweeId) {
-    return jsonError("Session does not match interviewee", 400);
-  }
 
-  const existingScore = await MockInterview.findOne({
-    sessionId,
-    interviewerId: authUserId,
-  }).lean();
+  const existingScore = await MockInterview.findOne({ sessionId, interviewerId: authUserId }).lean();
   if (existingScore) {
     return jsonError("You have already submitted a score for this mock", 409);
   }
 
   const interviewer = await User.findById(authUserId).lean();
   const sessionQuestions = session.questions.map((q) => `${q.subjectName}: ${q.question}`);
-  const sessionTopicIds = session.questions
-    .filter((q) => q.topicId)
-    .map((q) => String(q.topicId));
+  const sessionTopicIds = session.questions.filter((q) => q.topicId).map((q) => String(q.topicId));
+  const finalScore = Math.round(scoreNum);
 
   let interview;
   try {
     interview = await MockInterview.create({
-      userId: resolvedIntervieweeId,
-      groupId: resolvedGroupId,
+      userId: intervieweeId,
+      groupId,
       sessionId,
       interviewerId: authUserId,
-      date: date ? new Date(date) : new Date(),
-      subjectId,
+      date: new Date(),
       interviewer: interviewer?.name,
-      score: Math.min(100, Math.max(0, score)),
-      questionsAsked: questionsAsked ?? sessionQuestions,
-      strengths: strengths ?? [],
-      weaknesses: weaknesses ?? [],
-      feedback,
+      score: finalScore,
+      questionsAsked: sessionQuestions,
+      strengths: cleanList(strengths),
+      weaknesses: cleanList(weaknesses),
+      feedback: typeof feedback === "string" ? feedback.trim() : undefined,
       rubric: cleanRubric(rubric),
-      followUpTopicIds: followUpTopicIds ?? sessionTopicIds,
+      followUpTopicIds: sessionTopicIds,
     });
   } catch (err) {
     if (isDuplicateKeyError(err)) {
@@ -127,28 +125,22 @@ export const POST = withAuth(async (request, { userId: authUserId }) => {
     throw err;
   }
 
-  const priorScoreCount = await MockInterview.countDocuments({ sessionId });
-  const topicIds = followUpTopicIds ?? sessionTopicIds;
-  if (priorScoreCount === 1 && topicIds.length) {
+  // A weak result queues the topics that were asked for the interviewee only (not the whole group),
+  // and a strong one leaves their progress alone.
+  if (finalScore < NEEDS_REVISION_BELOW && sessionTopicIds.length > 0) {
     const now = new Date();
     await TopicProgress.bulkWrite(
-      topicIds.map((topicId: string) => ({
+      sessionTopicIds.map((topicId) => ({
         updateOne: {
-          filter: { userId: resolvedIntervieweeId, topicId },
-          update: { $set: { confidence: "weak", status: "learning" } },
+          filter: { userId: intervieweeId, topicId },
+          update: { $set: { confidence: "weak", status: "learning", nextRevision: now } },
           upsert: true,
         },
       }))
     );
-    await Topic.bulkWrite(
-      topicIds.map((topicId: string) => ({
-        updateOne: {
-          filter: { _id: topicId },
-          update: { $set: { nextRevision: now, confidence: "weak" } },
-        },
-      }))
-    );
   }
+
+  invalidateGroupInsights(groupId); // the interviewee's analytics include their mock scores
 
   return jsonOk(serializeDoc(interview), 201);
 }, "Failed to create interview");

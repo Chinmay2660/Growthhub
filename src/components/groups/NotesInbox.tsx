@@ -5,6 +5,7 @@ import { BellRing, Check } from "lucide-react";
 import Card, { CardHeader } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import { apiGet, apiPatch } from "@/lib/api";
+import { NOTES_CHANGED_EVENT } from "@/lib/use-unread-notes";
 
 type Note = {
   _id: string;
@@ -72,6 +73,7 @@ export default function NotesInbox({
     setNotes((prev) => prev?.map((n) => (!ids || ids.includes(n._id) ? { ...n, read: true } : n)) ?? prev);
     try {
       await apiPatch("/api/group-notes", { groupId, ids });
+      window.dispatchEvent(new Event(NOTES_CHANGED_EVENT));
       onUnreadChange?.(
         (notes ?? []).filter((n) => !n.read && ids && !ids.includes(n._id)).length
       );

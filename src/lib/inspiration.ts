@@ -142,13 +142,14 @@ function pickFrom<T>(arr: T[], seed: number): T {
   return arr[seed % arr.length];
 }
 
-/** Context-aware quote: roast when slacking, hype when earning it, CTC when target is set. */
+/** Context-aware quote: a nudge when there's no streak, encouragement when earning it, CTC when a target is set. */
 export function pickInspiration(ctx: InspirationContext): InspirationMessage {
   const seed = hashSeed(ctx);
   const pool: InspirationMessage[] = [...MOTIVATIONAL];
 
-  // Tough-love quotes are in the mix for everyone, whatever the streak or today's progress.
-  pool.push(...DEMOTIVATIONAL, ...DEMOTIVATIONAL);
+  // Tough-love quotes only appear for someone with no current streak, once each in the mix. People who are
+  // practising get encouragement, in line with the app's positive-accountability approach.
+  if ((ctx.studyStreak ?? 0) === 0) pool.push(...DEMOTIVATIONAL);
 
   if (ctx.targetCtcLpa && ctx.targetCtcLpa > 0) {
     pool.push(...ctcMessages(ctx.targetCtcLpa));

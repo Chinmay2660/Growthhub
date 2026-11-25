@@ -12,6 +12,8 @@ export interface IGroup extends Document {
   joinCode: string;
   joinCodeExpiresAt: Date;
   interviewDate?: Date;
+  /** Questions each member aims to solve per week (the group's weekly target is this times the members). */
+  weeklyGoalPerMember: number;
   ownerId: mongoose.Types.ObjectId;
   members: IGroupMember[];
   createdAt: Date;
@@ -34,6 +36,7 @@ const GroupSchema = new Schema<IGroup>(
     joinCode: { type: String, required: true, unique: true },
     joinCodeExpiresAt: { type: Date, required: true },
     interviewDate: { type: Date },
+    weeklyGoalPerMember: { type: Number, default: 5, min: 1, max: 100 },
     ownerId: { type: Schema.Types.ObjectId, ref: "User", required: true },
     members: [GroupMemberSchema],
   },

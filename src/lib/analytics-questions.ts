@@ -1,7 +1,6 @@
 import { addIstDays, istDateKey, normalizeQuestionStatus, startOfDay } from "@/lib/utils";
 const STATUS_LABELS: Record<string, string> = {
   not_started: "Not started",
-  add_to_todo: "To do",
   in_progress: "In progress",
   revised: "Revised",
   done: "Done",

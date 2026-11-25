@@ -1,5 +1,6 @@
 "use client";
 
+import { useDocumentTitle } from "@/lib/use-document-title";
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import clsx from "clsx";
@@ -10,6 +11,8 @@ import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
 import PageHeader from "@/components/ui/PageHeader";
 import { Input } from "@/components/ui/Input";
+import FormField from "@/components/ui/FormField";
+import ModalFooter from "@/components/ui/ModalFooter";
 import { GroupsPageSkeleton, ErrorState, EmptyState } from "@/components/ui/StateViews";
 import InviteCodeBlock from "@/components/groups/InviteCodeBlock";
 import { formatDate, isGroupFull, JOIN_CODE_TTL_MINUTES, MAX_GROUP_MEMBERS } from "@/lib/utils";
@@ -24,7 +27,8 @@ type GroupListItem = Group & {
 };
 
 export default function GroupsPage() {
-  const { user, refreshUser } = useUser();
+  const { user, refreshUser, updateUser } = useUser();
+  useDocumentTitle("Groups");
   const [groups, setGroups] = useState<GroupListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [joining, setJoining] = useState(false);
@@ -58,6 +62,19 @@ export default function GroupsPage() {
   }, [user?._id]);
 
   useEffect(() => { load(); }, [load]);
+
+  const [switchingId, setSwitchingId] = useState<string | null>(null);
+  const makeActive = async (groupId: string) => {
+    setSwitchingId(groupId);
+    try {
+      await updateUser({ activeGroupId: groupId });
+      toast.success("Active group changed");
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Could not switch group"));
+    } finally {
+      setSwitchingId(null);
+    }
+  };
 
   const handleJoin = async () => {
     if (joinCode.length !== 6 || !user) return;
@@ -222,7 +239,17 @@ export default function GroupsPage() {
                   </p>
                 )}
 
-                <div className="mt-4 pl-1">
+                <div className="mt-4 flex items-center gap-4 pl-1">
+                  {!isActive && (
+                    <button
+                      type="button"
+                      onClick={() => void makeActive(g._id)}
+                      disabled={switchingId !== null}
+                      className="text-sm font-medium text-[var(--foreground)] hover:text-brand disabled:opacity-50"
+                    >
+                      {switchingId === g._id ? "Switching…" : "Make active"}
+                    </button>
+                  )}
                   <Link
                     href={`/groups/${g._id}`}
                     className="text-sm font-medium text-brand hover:underline"
@@ -251,10 +278,13 @@ export default function GroupsPage() {
             onChange={(e) => setJoinCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
             placeholder="123456"
             className="font-mono tracking-widest"
+            aria-label="Invite code"
           />
-          <Button onClick={handleJoin} className="w-full" loading={joining} disabled={joinCode.length !== 6}>
-            Join Group
-          </Button>
+          <ModalFooter onCancel={() => setShowJoin(false)} cancelDisabled={joining}>
+            <Button onClick={handleJoin} loading={joining} disabled={joinCode.length !== 6}>
+              Join group
+            </Button>
+          </ModalFooter>
         </div>
       </Modal>
 
@@ -263,34 +293,27 @@ export default function GroupsPage() {
           <p className="text-sm text-[var(--muted)]">
             Set up a shared prep group. You can invite teammates later with a short-lived code.
           </p>
-          <div>
-            <label className="text-sm font-medium">Group name</label>
+          <FormField label="Group name">
             <Input
               type="text"
               value={createName}
               onChange={(e) => setCreateName(e.target.value)}
               placeholder={`${user?.name ?? "My"}'s Prep Group`}
-              className="mt-1"
             />
-          </div>
-          <div>
-            <label className="text-sm font-medium">Description (optional)</label>
+          </FormField>
+          <FormField label="Description (optional)">
             <Input
               type="text"
               value={createDescription}
               onChange={(e) => setCreateDescription(e.target.value)}
               placeholder="e.g. FAANG switch prep squad"
-              className="mt-1"
             />
-          </div>
-          <Button
-            onClick={handleCreate}
-            className="w-full"
-            loading={creating}
-            disabled={!createName.trim()}
-          >
-            {creating ? "Creating…" : "Create Group"}
-          </Button>
+          </FormField>
+          <ModalFooter onCancel={() => setShowCreate(false)} cancelDisabled={creating}>
+            <Button onClick={handleCreate} loading={creating} disabled={!createName.trim()}>
+              {creating ? "Creating…" : "Create group"}
+            </Button>
+          </ModalFooter>
         </div>
       </Modal>
 

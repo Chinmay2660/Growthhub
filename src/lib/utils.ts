@@ -67,6 +67,13 @@ export function jsonOk<T>(data: T, init?: number) {
 }
 
 export function jsonError(message: string, status = 400) {
+  // Server faults can carry internal detail (database or library messages), so those are logged here
+  // and callers only see a generic line in production. Client errors (4xx) keep their specific message.
+  if (status >= 500) {
+    console.error("[api] server error:", message);
+    const safe = process.env.NODE_ENV === "production" ? "Something went wrong. Please try again." : message;
+    return Response.json({ success: false, error: safe }, { status });
+  }
   return Response.json({ success: false, error: message }, { status });
 }
 
@@ -176,6 +183,20 @@ export function formatInterviewDate(date: string | Date): string {
 export function startOfDay(date: Date): Date {
   const { y, m, d } = istDateParts(date);
   return istDateFromParts(y, m, d);
+}
+
+/**
+ * The streak as of now. The stored number only counts while the last study day was today or
+ * yesterday (IST); after a missed day it is 0, instead of showing a stale count forever.
+ */
+export function currentStreak(
+  streak: number | undefined | null,
+  lastStudyDate: Date | string | null | undefined,
+  now: Date = new Date()
+): number {
+  if (!streak || !lastStudyDate) return 0;
+  const gap = Math.round((startOfDay(now).getTime() - startOfDay(new Date(lastStudyDate)).getTime()) / 86400000);
+  return gap <= 1 ? streak : 0;
 }
 
 export function addIstDays(date: Date, days: number): Date {
@@ -363,15 +384,8 @@ export function normalizeTopicStatus(status: string | undefined): TopicStatus {
   return (status && status in TOPIC_STATUS_META ? status : "not_started") as TopicStatus;
 }
 
-export const TASK_STATUS_META: Record<string, { label: string; color: string; bg: string }> = {
-  pending: { label: "Pending", color: "text-[var(--muted)]", bg: "bg-[var(--surface-muted)]" },
-  in_progress: { label: "In Progress", color: "text-blue-600", bg: "bg-blue-50" },
-  completed: { label: "Completed", color: "text-emerald-600", bg: "bg-emerald-50" },
-};
-
 export const QUESTION_STATUS_ORDER: QuestionStatus[] = [
   "not_started",
-  "add_to_todo",
   "in_progress",
   "revised",
   "done",
@@ -379,6 +393,7 @@ export const QUESTION_STATUS_ORDER: QuestionStatus[] = [
 
 const LEGACY_QUESTION_STATUS: Record<string, QuestionStatus> = {
   not_attempted: "not_started",
+  add_to_todo: "not_started", // retired status (it queued a task); existing records read as not started
   practiced: "in_progress",
   struggled: "in_progress",
   mastered: "done",
@@ -516,15 +531,6 @@ export const QUESTION_STATUS_META: Record<
     text: "",
     rowBorder: "border-l-red-400 dark:border-l-red-400",
     rowBg: "hover:bg-red-500/5 dark:hover:bg-red-400/10",
-  },
-  add_to_todo: {
-    label: "Add to do",
-    dot: "#8b5cf6",
-    bg: "qs-add_to_todo",
-    border: "",
-    text: "",
-    rowBorder: "border-l-violet-400 dark:border-l-violet-400",
-    rowBg: "hover:bg-violet-500/5 dark:hover:bg-violet-400/10",
   },
   in_progress: {
     label: "In Progress",

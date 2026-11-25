@@ -7,6 +7,8 @@ import { ExternalLink } from "lucide-react";
 import { useUser } from "@/components/providers/UserProvider";
 import AppLogo from "@/components/ui/AppLogo";
 import ThemeToggle from "@/components/ui/ThemeToggle";
+import GroupSwitcher from "./GroupSwitcher";
+import { useUnreadNotes } from "@/lib/use-unread-notes";
 import { openCareerFlow } from "@/lib/apps-client";
 import { buildMainNav, isExternalNavItem, isNavItemActive } from "./nav-config";
 
@@ -22,6 +24,7 @@ export default function Sidebar() {
   const pathname = usePathname();
   const { user } = useUser();
   const nav = buildMainNav(user?.activeGroupId);
+  const unread = useUnreadNotes(user?.activeGroupId);
 
   return (
     <aside className="hidden h-full w-60 shrink-0 flex-col border-r border-[var(--border)] bg-[var(--card)] lg:flex">
@@ -29,7 +32,8 @@ export default function Sidebar() {
         <AppLogo size="sm" />
         <div className="text-sm font-bold text-[var(--foreground)]">GrowthHub</div>
       </div>
-      <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-3">
+      <GroupSwitcher className="mx-3 mt-3" />
+      <nav aria-label="Main" className="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-3">
         {nav.map((item) => {
           const active = !isExternalNavItem(item) && isNavItemActive(pathname, item.href);
           const Icon = item.icon;
@@ -50,12 +54,25 @@ export default function Sidebar() {
           }
 
           return (
-            <Link key={item.id} href={item.href} className={navItemClass(active)}>
+            <Link
+              key={item.id}
+              href={item.href}
+              className={navItemClass(active)}
+              aria-current={active ? "page" : undefined}
+            >
               <Icon
                 className="h-[18px] w-[18px] shrink-0"
                 strokeWidth={active ? 2.25 : 1.75}
               />
               {item.label}
+              {item.id === "dashboard" && unread > 0 && (
+                <span
+                  className="ml-auto rounded-full bg-brand px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white"
+                  aria-label={`${unread} unread note${unread === 1 ? "" : "s"}`}
+                >
+                  {unread}
+                </span>
+              )}
             </Link>
           );
         })}
@@ -70,6 +87,7 @@ export default function Sidebar() {
               pathname === `/users/${user._id}` && "bg-[var(--surface-muted)]"
             )}
             aria-label="Open your profile"
+            aria-current={pathname === `/users/${user._id}` ? "page" : undefined}
           >
             <div className="text-sm font-medium text-[var(--foreground)]">{user.name}</div>
             <div className="text-xs text-[var(--muted)]">
