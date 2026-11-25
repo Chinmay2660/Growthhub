@@ -19,7 +19,8 @@ import ProgressBar, { ProgressRing } from "@/components/ui/ProgressBar";
 import { MockInterviewsSkeleton, ErrorState } from "@/components/ui/StateViews";
 import { formatDate, formatDateTime, parseAppDateTime, toDateTimeLocalValue } from "@/lib/utils";
 import toast from "react-hot-toast";
-import { canManageGroup } from "@/lib/group-roles";
+import { canManageGroup, isGroupAdminRole } from "@/lib/group-roles";
+import { useConfirm } from "@/components/providers/ConfirmProvider";
 import type { GroupRole, MockInterviewSchedule, MockInterviewScheduleMember } from "@/types";
 
 const STATUS_LABEL: Record<MockInterviewScheduleMember["status"], string> = {
@@ -99,9 +100,6 @@ export default function GroupMockInterviewsTab({
 }) {
   const [schedule, setSchedule] = useState<MockInterviewSchedule | null>(null);
   const [activeRoundId, setActiveRoundId] = useState("");
-  // The current round once its date has passed and everyone has finished: it belongs under Past, even though
-  // a new round has not been started yet.
-  const [finishedRoundId, setFinishedRoundId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedId, setSelectedId] = useState("");
@@ -166,15 +164,9 @@ export default function GroupMockInterviewsTab({
   const selected = schedule?.members.find((m) => m.userId === selectedId) ?? null;
   const activeRound = schedule?.rounds.find((r) => r._id === schedule.activeRoundId);
   const isHistory = viewMode === "history" || (schedule?.isViewingHistory ?? false);
-  const pastRounds = schedule?.rounds.filter((r) => !r.isCurrent || r._id === finishedRoundId) ?? [];
-
-  useEffect(() => {
-    if (!schedule || schedule.activeRoundId !== schedule.currentRoundId) return; // only known for the round on screen
-    const round = schedule.rounds.find((r) => r._id === schedule.currentRoundId);
-    const passed = Boolean(round?.interviewDate) && new Date(round!.interviewDate!).getTime() < Date.now();
-    const everyoneDone = schedule.members.length > 0 && schedule.members.every((m) => m.status === "completed");
-    setFinishedRoundId(passed && everyoneDone ? schedule.currentRoundId : null);
-  }, [schedule]);
+  // A completed round moves to Past even while it is still the latest one.
+  const pastRounds = schedule?.rounds.filter((r) => !r.isCurrent || r.isCompleted) ?? [];
+  const upcomingEmpty = viewMode === "schedule" && (schedule?.currentRoundCompleted ?? false);
 
   const switchViewMode = (mode: ViewMode) => {
     setViewMode(mode);
@@ -188,6 +180,9 @@ export default function GroupMockInterviewsTab({
 
   const myRole = schedule?.members.find((m) => m.userId === currentUserId)?.role as GroupRole | undefined;
   const canManage = canManageGroup(myRole);
+  const isGroupAdmin = isGroupAdminRole(myRole);
+  const confirm = useConfirm();
+  const [completing, setCompleting] = useState(false);
   const isSelf = selectedId === currentUserId;
   const canGenerate =
     canManage &&
@@ -246,17 +241,19 @@ export default function GroupMockInterviewsTab({
     setShowScheduleModal(true);
   };
 
-  const saveMockDate = async () => {
-    if (!schedule || !mockDate) return;
+  const saveMockDate = async (opts?: { instant?: boolean }) => {
+    const instant = opts?.instant === true;
+    if (!schedule || (!mockDate && !instant)) return;
     setSavingMockDate(true);
     try {
       if (nextRoundMode) {
         const created = await apiPatch<{ roundId: string; roundNumber: number }>("/api/mock-interviews/schedule", {
           action: "startNextRound",
           groupId,
-          scheduledAt: parseAppDateTime(mockDate).toISOString(),
+          ...(instant ? { instant: true } : { scheduledAt: parseAppDateTime(mockDate).toISOString() }),
         });
-        toast.success(`Round ${created.roundNumber} scheduled`);
+        toast.success(instant ? `Round ${created.roundNumber} started` : `Round ${created.roundNumber} scheduled`);
+        setViewMode("schedule");
         setShowScheduleModal(false);
         setNextRoundMode(false);
         await load(created.roundId);
@@ -266,16 +263,41 @@ export default function GroupMockInterviewsTab({
         action: "setMockDate",
         groupId,
         roundId: schedule.activeRoundId,
-        scheduledAt: parseAppDateTime(mockDate).toISOString(),
+        ...(instant ? { instant: true } : { scheduledAt: parseAppDateTime(mockDate).toISOString() }),
       });
       patchRoundAndMemberDates(data.scheduledAt);
-      toast.success("Group mock date saved");
+      toast.success(instant ? "Mock started" : "Group mock date saved");
       setShowScheduleModal(false);
       void load(schedule.activeRoundId, true);
     } catch (err) {
       toast.error(getErrorMessage(err, "Failed to save mock date"));
     } finally {
       setSavingMockDate(false);
+    }
+  };
+
+  const markRoundComplete = async () => {
+    if (!schedule) return;
+    const ok = await confirm({
+      title: "Mark round complete?",
+      message: "This moves the round to Past. You can then schedule the next one.",
+      confirmLabel: "Mark complete",
+      variant: "default",
+    });
+    if (!ok) return;
+    setCompleting(true);
+    try {
+      await apiPatch("/api/mock-interviews/schedule", {
+        action: "completeRound",
+        groupId,
+        roundId: schedule.activeRoundId,
+      });
+      toast.success("Round moved to Past");
+      await load(schedule.activeRoundId);
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Failed to complete round"));
+    } finally {
+      setCompleting(false);
     }
   };
 
@@ -322,7 +344,7 @@ export default function GroupMockInterviewsTab({
     ? formatDateTime(activeRound.interviewDate)
     : "Not scheduled";
 
-  const showRoster = viewMode === "schedule" || pastRounds.length > 0;
+  const showRoster = !upcomingEmpty && (viewMode === "schedule" || pastRounds.length > 0);
 
   return (
     <div className="space-y-6">
@@ -344,7 +366,25 @@ export default function GroupMockInterviewsTab({
           }
         />
 
-        {viewMode === "history" && pastRounds.length === 0 ? (
+        {upcomingEmpty ? (
+          <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-muted)]/40 px-4 py-10 text-center">
+            <p className="text-sm font-medium text-[var(--foreground)]">No upcoming mock</p>
+            <p className="mt-1 text-sm text-[var(--muted)]">
+              The last round is complete and moved to Past.
+              {canManage ? " Start one now or schedule it for later." : " An admin can schedule the next one."}
+            </p>
+            {canManage && (
+              <div className="mt-4 flex flex-wrap justify-center gap-2">
+                <Button size="sm" onClick={() => void saveMockDate({ instant: true })} loading={savingMockDate}>
+                  Start instant mock
+                </Button>
+                <Button size="sm" variant="outline" onClick={openNextRoundModal}>
+                  Schedule for later
+                </Button>
+              </div>
+            )}
+          </div>
+        ) : viewMode === "history" && pastRounds.length === 0 ? (
           <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-muted)]/40 px-4 py-8 text-center">
             <p className="text-sm font-medium text-[var(--foreground)]">No past mocks yet</p>
             <p className="mt-1 text-sm text-[var(--muted)]">
@@ -365,7 +405,7 @@ export default function GroupMockInterviewsTab({
                   <ProgressRing value={completionPct} size={88} />
                   <div className="min-w-0">
                     <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-                      {viewMode === "history" ? "Past round" : activeRound && activeRound._id === finishedRoundId ? "Round complete" : "Upcoming round"}
+                      {viewMode === "history" ? "Past round" : "Upcoming round"}
                     </p>
                     <p className="mt-0.5 text-lg font-bold text-[var(--foreground)] sm:text-xl">
                       {roundDateLabel}
@@ -388,6 +428,11 @@ export default function GroupMockInterviewsTab({
                     {isMockToday || roundHasPassed ? (
                       <Button size="sm" onClick={openNextRoundModal}>
                         Start next round
+                      </Button>
+                    ) : null}
+                    {isGroupAdmin && currentRoundHasDate ? (
+                      <Button size="sm" variant="outline" onClick={() => void markRoundComplete()} loading={completing}>
+                        Mark complete
                       </Button>
                     ) : null}
                   </div>
@@ -689,7 +734,7 @@ export default function GroupMockInterviewsTab({
         onClose={() => setShowScheduleModal(false)}
         value={mockDate}
         onChange={setMockDate}
-        onSave={() => void saveMockDate()}
+        onSave={(opts) => void saveMockDate(opts)}
         saving={savingMockDate}
         title={nextRoundMode ? "Schedule next round" : "Schedule group mock"}
       />

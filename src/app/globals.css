@@ -408,25 +408,47 @@ body {
     visibility: hidden;
   }
 
+  /* Status trigger: a solid card-coloured base with the status tint layered on top, so it stays readable on
+     the tinted table row. The chevron is the <ChevronDown> rendered by Select, not a background image. */
   .question-status-select {
     appearance: none;
-    border-width: 1px;
+    border-width: 1.5px;
     border-style: solid;
-    background-repeat: no-repeat;
-    background-position: right 0.5rem center;
-    background-size: 0.75rem;
-    padding-right: 1.75rem;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2378716c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-color: var(--card);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
   }
 
   .dark .question-status-select {
     color-scheme: dark;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a8a29e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   }
 
-  .question-status-select option {
-    background-color: var(--card);
-    color: var(--foreground);
+  .question-status-select svg {
+    opacity: 1;
+    stroke-width: 2.5;
+  }
+
+  .question-status-select.qs-not_started {
+    background-image: linear-gradient(var(--qs-not_started-bg), var(--qs-not_started-bg));
+    color: var(--qs-not_started-text);
+    border-color: var(--qs-not_started-border);
+  }
+
+  .question-status-select.qs-in_progress {
+    background-image: linear-gradient(var(--qs-in_progress-bg), var(--qs-in_progress-bg));
+    color: var(--qs-in_progress-text);
+    border-color: var(--qs-in_progress-border);
+  }
+
+  .question-status-select.qs-revised {
+    background-image: linear-gradient(var(--qs-revised-bg), var(--qs-revised-bg));
+    color: var(--qs-revised-text);
+    border-color: var(--qs-revised-border);
+  }
+
+  .question-status-select.qs-done {
+    background-image: linear-gradient(var(--qs-done-bg), var(--qs-done-bg));
+    color: var(--qs-done-text);
+    border-color: var(--qs-done-border);
   }
 
   .qs-not_started {
@@ -434,7 +456,6 @@ body {
     color: var(--qs-not_started-text);
     border-color: var(--qs-not_started-border);
   }
-
 
   .qs-in_progress {
     background-color: var(--qs-in_progress-bg);

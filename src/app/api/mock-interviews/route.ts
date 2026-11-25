@@ -3,6 +3,7 @@ import { isDuplicateKeyError } from "@/lib/db-indexes";
 import { jsonOk, jsonError } from "@/lib/utils";
 import { serializeDoc, isGroupMember, invalidateGroupInsights } from "@/lib/services";
 import { isObjectId } from "@/lib/access";
+import { autoCompleteRoundIfDone } from "@/lib/mock-rounds";
 import MockInterview from "@/models/MockInterview";
 import MockInterviewSession from "@/models/MockInterviewSession";
 import Subject from "@/models/Subject";
@@ -139,6 +140,8 @@ export const POST = withAuth(async (request, { userId: authUserId }) => {
       }))
     );
   }
+
+  await autoCompleteRoundIfDone(groupId, String(session.roundId)).catch(() => false);
 
   invalidateGroupInsights(groupId); // the interviewee's analytics include their mock scores
 

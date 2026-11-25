@@ -3,6 +3,9 @@ import { ensureMockInterviewIndexes, isDuplicateKeyError } from "@/lib/db-indexe
 import { isSameIstDay } from "@/lib/utils";
 import MockInterviewRound from "@/models/MockInterviewRound";
 import MockInterviewSlot from "@/models/MockInterviewSlot";
+import Group from "@/models/Group";
+import MockInterview from "@/models/MockInterview";
+import MockInterviewSession from "@/models/MockInterviewSession";
 import PracticeQuestion from "@/models/PracticeQuestion";
 import QuestionProgress from "@/models/QuestionProgress";
 
@@ -40,6 +43,7 @@ export type MockRoundRecord = {
   _id: { toString(): string };
   roundNumber: number;
   interviewDate?: Date;
+  completedAt?: Date;
   startsAt: Date;
   createdAt: Date;
 };
@@ -172,4 +176,32 @@ export async function countQuestionsDoneBatch(
     zeros.set(String(row._id), row.count);
   }
   return zeros;
+}
+
+/**
+ * Marks a round complete once every member has a mock session scored by all their peers.
+ * Returns true when the round is (now) complete. Safe to call after every submitted score.
+ */
+export async function autoCompleteRoundIfDone(groupId: string, roundId: string): Promise<boolean> {
+  const round = await MockInterviewRound.findById(roundId).lean();
+  if (!round) return false;
+  if (round.completedAt) return true;
+
+  const group = await Group.findById(groupId).lean();
+  if (!group || group.members.length < 2) return false;
+  const memberIds = group.members.map((m) => String(m.userId));
+
+  const sessions = await MockInterviewSession.find({ groupId, roundId }).lean();
+  if (memberIds.some((id) => !sessions.some((s) => String(s.intervieweeId) === id))) return false;
+
+  const scores = await MockInterview.find({ sessionId: { $in: sessions.map((s) => s._id) } })
+    .select("sessionId")
+    .lean();
+  const scoreCount = new Map<string, number>();
+  for (const sc of scores) scoreCount.set(String(sc.sessionId), (scoreCount.get(String(sc.sessionId)) ?? 0) + 1);
+  const everyoneScored = sessions.every((s) => (scoreCount.get(String(s._id)) ?? 0) >= memberIds.length - 1);
+  if (!everyoneScored) return false;
+
+  await MockInterviewRound.findByIdAndUpdate(roundId, { completedAt: new Date() });
+  return true;
 }

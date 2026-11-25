@@ -159,6 +159,8 @@ export interface MockInterviewRoundSummary {
   roundNumber: number;
   interviewDate: string | null;
   isCurrent: boolean;
+  /** All peers have scored, or an admin marked it complete. A completed round lives under Past. */
+  isCompleted: boolean;
 }
 
 export interface MockInterviewScheduleMember {
@@ -181,6 +183,8 @@ export interface MockInterviewSchedule {
   activeRoundId: string;
   isViewingHistory: boolean;
   canGenerate: boolean;
+  /** The current round is complete: nothing is upcoming until an admin schedules the next one. */
+  currentRoundCompleted: boolean;
   rounds: MockInterviewRoundSummary[];
   members: MockInterviewScheduleMember[];
 }

@@ -1,6 +1,7 @@
 import { withAuth } from "@/lib/api-handler";
 import { jsonOk, jsonError, parseAppDateTime } from "@/lib/utils";
 import { serializeDoc, isGroupMember, canManageGroup } from "@/lib/services";
+import { isGroupAdminRole } from "@/lib/group-roles";
 import {
   listMockRounds,
   getCurrentRound,
@@ -143,12 +144,14 @@ export const GET = withAuth(async (request, { userId }) => {
     currentRoundId: currentRound ? String(currentRound._id) : null,
     activeRoundId: String(activeRound._id),
     isViewingHistory,
-    canGenerate: isOnMockInterviewDate(currentRoundDate),
+    canGenerate: !currentRound?.completedAt && isOnMockInterviewDate(currentRoundDate),
+    currentRoundCompleted: Boolean(currentRound?.completedAt),
     rounds: rounds.map((r) => ({
       _id: String(r._id),
       roundNumber: r.roundNumber,
       interviewDate: interviewDates.get(String(r._id))?.toISOString() ?? null,
       isCurrent: currentRound ? String(r._id) === String(currentRound._id) : false,
+      isCompleted: Boolean(r.completedAt),
     })),
     members,
   });
@@ -168,15 +171,20 @@ export const PATCH = withAuth(async (request, { userId }) => {
   // Start the next round once the current one has happened.
   if (action === "startNextRound" || action === "addMockDate") {
     if (!canManageGroup(role)) return jsonError("Only admins and co-admins can start a new round", 403);
-    if (!scheduledAt) return jsonError("scheduledAt is required");
-    const parsed = parseAppDateTime(scheduledAt);
+    if (!scheduledAt && !body.instant) return jsonError("scheduledAt is required");
+    const parsed = body.instant ? new Date() : parseAppDateTime(scheduledAt);
     if (Number.isNaN(parsed.getTime())) return jsonError("Invalid scheduledAt");
-    if (parsed.getTime() <= Date.now()) return jsonError("Pick a date and time in the future");
+    if (parsed.getTime() < Date.now() - 60_000) return jsonError("Pick the current time or a later one");
 
     const rounds = await listMockRounds(groupId);
     const current = getCurrentRound(rounds);
     const currentDate = current?.interviewDate ? new Date(current.interviewDate) : null;
-    if (currentDate && currentDate.getTime() > Date.now() && !isOnMockInterviewDate(currentDate)) {
+    if (
+      !current?.completedAt &&
+      currentDate &&
+      currentDate.getTime() > Date.now() &&
+      !isOnMockInterviewDate(currentDate)
+    ) {
       return jsonError("The current round hasn't happened yet. Change its date instead.", 400);
     }
 
@@ -201,11 +209,21 @@ export const PATCH = withAuth(async (request, { userId }) => {
     return jsonError("Can only edit the upcoming mock date", 400);
   }
 
+  if (action === "completeRound") {
+    if (!isGroupAdminRole(role)) return jsonError("Only the group admin can mark a round complete", 403);
+    await MockInterviewRound.findByIdAndUpdate(roundId, { completedAt: new Date() });
+    return jsonOk({ completed: true });
+  }
+
+  if (currentRound.completedAt && (action === "setMockDate" || action === "setAllInterviewDates")) {
+    return jsonError("This round is complete. Schedule the next round instead.", 400);
+  }
+
   if (action === "setMockDate" || action === "setAllInterviewDates") {
     if (!canManageGroup(role)) return jsonError("Only admins and co-admins can set mock schedules", 403);
-    if (!scheduledAt) return jsonError("scheduledAt is required");
+    if (!scheduledAt && !body.instant) return jsonError("scheduledAt is required");
 
-    const parsed = parseAppDateTime(scheduledAt);
+    const parsed = body.instant ? new Date() : parseAppDateTime(scheduledAt);
     if (Number.isNaN(parsed.getTime())) return jsonError("Invalid scheduledAt");
     if (parsed.getTime() < Date.now() - 60_000) return jsonError("The mock date can't be in the past");
 

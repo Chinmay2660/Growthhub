@@ -5,6 +5,8 @@ export interface IMockInterviewRound extends Document {
   groupId: mongoose.Types.ObjectId;
   roundNumber: number;
   interviewDate?: Date;
+  /** Set once every member has been scored, or when an admin marks the round complete. */
+  completedAt?: Date;
   startsAt: Date;
   endsAt: Date;
   createdAt: Date;
@@ -16,6 +18,7 @@ const MockInterviewRoundSchema = new Schema<IMockInterviewRound>(
     groupId: { type: Schema.Types.ObjectId, ref: "Group", required: true },
     roundNumber: { type: Number, required: true, min: 1 },
     interviewDate: { type: Date },
+    completedAt: { type: Date },
     startsAt: { type: Date, required: true },
     endsAt: { type: Date, required: true },
   },

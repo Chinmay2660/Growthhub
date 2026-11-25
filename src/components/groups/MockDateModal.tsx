@@ -1,10 +1,9 @@
 "use client";
 
 import clsx from "clsx";
-import { useState } from "react";
-import { CalendarClock } from "lucide-react";
+import { useEffect, useState } from "react";
+import { CalendarClock, Zap } from "lucide-react";
 import Modal from "@/components/ui/Modal";
-import Select from "@/components/ui/Select";
 import DatePicker from "@/components/ui/DatePicker";
 import Button from "@/components/ui/Button";
 import FormField from "@/components/ui/FormField";
@@ -16,12 +15,11 @@ function fmtTime(hhmm: string) {
   return `${h % 12 || 12}${m ? `:${String(m).padStart(2, "0")}` : ""} ${h >= 12 ? "PM" : "AM"}`;
 }
 
-/** Start times in 15-minute slots across the day. */
-const TIME_SLOTS = Array.from({ length: 96 }, (_, i) => {
-  const h = Math.floor(i / 4);
-  const m = (i % 4) * 15;
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-});
+/** Quick "in N minutes" offsets, a 15-minute gap apart. */
+/** Module-level so event handlers read the clock outside render. */
+const readClock = () => Date.now();
+
+const QUICK_OFFSETS = [15, 30, 45, 60];
 
 /** "value" is a datetime-local string in IST (YYYY-MM-DDTHH:mm). */
 export default function MockDateModal({
@@ -37,20 +35,36 @@ export default function MockDateModal({
   onClose: () => void;
   value: string;
   onChange: (next: string) => void;
-  onSave: () => void;
+  /** `instant` means start right now; the server uses its own clock. */
+  onSave: (opts?: { instant?: boolean }) => void;
   saving: boolean;
   title?: string;
 }) {
-  const [now] = useState(() => Date.now());
+  const [now, setNow] = useState(readClock);
+  const [mode, setMode] = useState<"now" | "later">("later");
   const [datePart = "", timePart = ""] = value.split("T");
-  const setDate = (d: string) => onChange(`${d}T${timePart || "14:00"}`);
-  // Keep an off-grid time (set before slots existed) selectable instead of silently changing it.
-  const timeOptions = timePart && !TIME_SLOTS.includes(timePart) ? [timePart, ...TIME_SLOTS] : TIME_SLOTS;
-  const setTime = (t: string) => onChange(`${datePart || toDateTimeLocalValue(new Date(now)).slice(0, 10)}T${t}`);
+  const todayIst = toDateTimeLocalValue(new Date(now)).slice(0, 10);
+
+  // Re-read the clock whenever the dialog opens so "now" and the past check are current.
+  useEffect(() => {
+    if (open) {
+      setNow(readClock());
+      setMode("later");
+    }
+  }, [open]);
+
+  const setDate = (d: string) => onChange(`${d}T${timePart || toDateTimeLocalValue(new Date(now)).slice(11)}`);
+  const setTime = (t: string) => onChange(`${datePart || todayIst}T${t}`);
+  const setInMinutes = (mins: number) => {
+    const t = readClock();
+    setNow(t);
+    onChange(toDateTimeLocalValue(new Date(t + mins * 60_000)));
+  };
 
   const complete = datePart !== "" && timePart !== "";
-  const parsed = complete ? parseAppDateTime(value) : null;
-  const inPast = parsed ? parsed.getTime() < now : false;
+  const parsed = mode === "now" ? new Date(now) : complete ? parseAppDateTime(value) : null;
+  // Same minute as "now" is fine, so a schedule for the current time is allowed.
+  const inPast = mode === "later" && parsed ? parsed.getTime() < now - 60_000 : false;
   const preview = parsed
     ? {
         day: parsed.toLocaleDateString("en-IN", {
@@ -60,16 +74,20 @@ export default function MockDateModal({
           month: "long",
           year: "numeric",
         }),
-        time: fmtTime(timePart),
+        time: fmtTime(toDateTimeLocalValue(parsed).slice(11)),
         rel: (() => {
+          const mins = Math.round((parsed.getTime() - now) / 60_000);
+          if (mode === "now" || Math.abs(mins) < 1) return "starts now";
+          if (mins > 0 && mins < 60) return `in ${mins} min`;
           const diff = Math.round((parsed.getTime() - now) / 86_400_000);
-          if (diff === 0) return "today";
+          if (mins >= 60 && diff === 0) return `in ${Math.round(mins / 60)} h`;
           if (diff === 1) return "tomorrow";
           if (diff > 1) return `in ${diff} days`;
           return "in the past";
         })(),
       }
     : null;
+  const canSave = mode === "now" || (complete && !inPast);
 
   return (
     <Modal open={open} onClose={onClose} title={title} size="sm">
@@ -77,7 +95,7 @@ export default function MockDateModal({
         className="space-y-5"
         onSubmit={(e) => {
           e.preventDefault();
-          if (complete && !inPast) onSave();
+          if (canSave) onSave(mode === "now" ? { instant: true } : undefined);
         }}
       >
         <div
@@ -96,33 +114,78 @@ export default function MockDateModal({
               <p className="text-xs text-[var(--muted)]">
                 {preview.time} IST · {preview.rel}
               </p>
-              {inPast && <p className="mt-0.5 text-xs text-[var(--danger)]">Choose a time in the future.</p>}
+              {inPast && <p className="mt-0.5 text-xs text-[var(--danger)]">Choose the current time or later.</p>}
             </div>
           ) : (
             <p className="text-sm text-[var(--muted)]">Pick a date and time</p>
           )}
         </div>
 
-        <div className="space-y-2">
-          <div className="grid grid-cols-2 gap-3">
-            <FormField label="Date">
-              <DatePicker value={datePart} onChange={setDate} className="text-sm font-normal" />
-            </FormField>
-            <FormField label="Time (IST)">
-              <Select
-                value={timePart}
-                onChange={setTime}
-                placeholder="Select"
-                className="text-sm font-normal"
-                options={timeOptions.map((tm) => ({ value: tm, label: fmtTime(tm) }))}
-              />
-            </FormField>
-          </div>
+        <div className="grid grid-cols-2 gap-1 rounded-lg bg-[var(--surface-muted)] p-0.5" role="tablist">
+          {(
+            [
+              ["now", "Start now"],
+              ["later", "Schedule"],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={mode === id}
+              onClick={() => setMode(id)}
+              className={clsx(
+                "flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-all",
+                mode === id
+                  ? "bg-[var(--card)] text-[var(--foreground)] shadow-soft"
+                  : "text-[var(--muted)] hover:text-[var(--foreground)]"
+              )}
+            >
+              {id === "now" && <Zap className="h-3.5 w-3.5" aria-hidden />}
+              {label}
+            </button>
+          ))}
         </div>
 
+        {mode === "now" ? (
+          <p className="text-sm text-[var(--muted)]">
+            The mock starts immediately, so questions can be generated and peers can score right away.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              {QUICK_OFFSETS.map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setInMinutes(m)}
+                  className="rounded-full border border-[var(--border)] px-3 py-1 text-xs font-semibold text-[var(--foreground)] hover:bg-[var(--surface-muted)]"
+                >
+                  {m < 60 ? `In ${m} min` : "In 1 hour"}
+                </button>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <FormField label="Date">
+                <DatePicker value={datePart} onChange={setDate} className="text-sm font-normal" />
+              </FormField>
+              <FormField label="Custom time (IST)">
+                <input
+                  type="time"
+                  step={60}
+                  value={timePart}
+                  onChange={(e) => setTime(e.target.value)}
+                  className="input text-sm font-normal"
+                  aria-label="Custom time (IST)"
+                />
+              </FormField>
+            </div>
+          </div>
+        )}
+
         <ModalFooter className="!mt-5" onCancel={onClose} cancelDisabled={saving}>
-          <Button type="submit" loading={saving} disabled={!complete || inPast}>
-            {saving ? "Saving…" : "Save date"}
+          <Button type="submit" loading={saving} disabled={!canSave}>
+            {saving ? "Saving…" : mode === "now" ? "Start now" : "Save date"}
           </Button>
         </ModalFooter>
       </form>
