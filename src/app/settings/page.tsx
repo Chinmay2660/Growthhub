@@ -25,6 +25,7 @@ import clsx from "clsx";
 import { useUser } from "@/components/providers/UserProvider";
 import { useConfirm } from "@/components/providers/ConfirmProvider";
 import { useTheme } from "@/components/providers/ThemeProvider";
+import AccentPicker from "@/components/ui/AccentPicker";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Chip from "@/components/ui/Chip";
@@ -604,6 +605,7 @@ export default function SettingsPage() {
             );
           })}
         </div>
+        <AccentPicker />
       </SettingsGroup>
 
       <SettingsGroup

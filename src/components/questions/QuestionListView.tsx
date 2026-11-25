@@ -36,6 +36,8 @@ export type QuestionListItem = {
   subjectName?: string;
   link?: string;
   scope?: ContentScope;
+  /** Which group a shared question belongs to (shown when the person is in several groups). */
+  groupName?: string;
 };
 
 /** Done and Revised both count as solved. */
@@ -119,6 +121,7 @@ export default function QuestionListView({
   onEdit,
   onDelete,
   showScope = false,
+  showGroup = false,
   showActions = false,
   sortBy,
   sortDir,
@@ -133,6 +136,8 @@ export default function QuestionListView({
   onEdit?: (question: QuestionListItem) => void;
   onDelete?: (id: string) => void;
   showScope?: boolean;
+  /** Adds a Group column; use it when shared questions come from more than one group. */
+  showGroup?: boolean;
   showActions?: boolean;
   sortBy?: QuestionSortField;
   sortDir?: QuestionSortDir;
@@ -160,7 +165,7 @@ export default function QuestionListView({
   const [preview, setPreview] = useState<QuestionListItem | null>(null);
   const confirm = useConfirm();
   const tableColSpan =
-    6 + (showScope ? 1 : 0) + (showActions ? 1 : 0);
+    6 + (showScope ? 1 : 0) + (showGroup ? 1 : 0) + (showActions ? 1 : 0);
 
   const handleDelete = async (q: QuestionListItem) => {
     if (!onDelete) return;
@@ -222,6 +227,9 @@ export default function QuestionListView({
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--muted)]">
               {showScope && q.scope && <QuestionScopeChip scope={q.scope} />}
+              {showGroup && q.groupName && (
+                <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[10px] font-semibold text-brand">{q.groupName}</span>
+              )}
               <span>{questionDateLabel(q)}</span>
               <span className="rounded-md bg-[var(--surface-muted)] px-1.5 py-0.5">
                 {q.trackLabel || q.subjectName}
@@ -270,6 +278,11 @@ export default function QuestionListView({
                   onSort={onSort}
                   className={`${scopeCol} px-4 py-3`}
                 />
+              )}
+              {showGroup && (
+                <th scope="col" className="min-w-[7rem] px-4 py-3 font-semibold">
+                  Group
+                </th>
               )}
               <SortableHeader
                 label="Status"
@@ -340,6 +353,15 @@ export default function QuestionListView({
                 {showScope && (
                   <td className="qs-row-cell px-4 py-3.5">
                     {q.scope ? <QuestionScopeChip scope={q.scope} /> : "—"}
+                  </td>
+                )}
+                {showGroup && (
+                  <td className="qs-row-cell px-4 py-3.5">
+                    {q.groupName ? (
+                      <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-semibold text-brand">{q.groupName}</span>
+                    ) : (
+                      "—"
+                    )}
                   </td>
                 )}
                 <td className={`qs-row-cell ${statusCol} px-4 py-3.5`}>

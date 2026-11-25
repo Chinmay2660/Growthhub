@@ -90,33 +90,33 @@ export default function QuestionsPage() {
   const [link, setLink] = useState("");
   const [practiceDate, setPracticeDate] = useState("");
   const [scope, setScope] = useState<ContentScope>("group");
-  const [canAddGroupQuestions, setCanAddGroupQuestions] = useState(false);
+  // The page is two tabs: shared questions from your groups, and your own personal ones.
+  const [tab, setTab] = useState<ContentScope>("group");
+  const [groups, setGroups] = useState<{ _id: string; name: string; myRole: GroupRole | null }[]>([]);
+  const [groupFilter, setGroupFilter] = useState<string>("all");
+  const [modalGroupId, setModalGroupId] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [showFilters, setShowFilters] = useState(false);
-  const [scopeFilter, setScopeFilter] = useState<"all" | ContentScope>("all");
   const [statusFilter, setStatusFilter] = useState<QuestionStatus[]>([]);
   const [subjectFilter, setSubjectFilter] = useState<string[]>([]);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const hasDateRange = Boolean(dateFrom || dateTo);
   const activeFilterCount =
-    (scopeFilter !== "all" ? 1 : 0) +
     (statusFilter.length ? 1 : 0) +
     (subjectFilter.length ? 1 : 0) +
     (dateFrom || dateTo ? 1 : 0);
   const [draft, setDraft] = useState<{
-    scope: "all" | ContentScope;
     status: QuestionStatus[];
     subject: string[];
     from: string;
     to: string;
-  }>({ scope: "all", status: [], subject: [], from: "", to: "" });
+  }>({ status: [], subject: [], from: "", to: "" });
   const openFilters = () => {
-    setDraft({ scope: scopeFilter, status: statusFilter, subject: subjectFilter, from: dateFrom, to: dateTo });
+    setDraft({ status: statusFilter, subject: subjectFilter, from: dateFrom, to: dateTo });
     setShowFilters(true);
   };
   const applyFilters = () => {
-    setScopeFilter(draft.scope);
     setStatusFilter(draft.status);
     setSubjectFilter(draft.subject);
     setDateFrom(draft.from);
@@ -126,7 +126,6 @@ export default function QuestionsPage() {
     setShowFilters(false);
   };
   const clearFilters = () => {
-    setScopeFilter("all");
     setStatusFilter([]);
     setSubjectFilter([]);
     setDateFrom("");
@@ -135,47 +134,59 @@ export default function QuestionsPage() {
   };
   const debouncedSearch = useDebouncedValue(searchInput, 300);
 
+  const [groupsLoaded, setGroupsLoaded] = useState(false);
+
+  const manageGroups = useMemo(() => groups.filter((g) => canManageGroup(g.myRole)), [groups]);
+  const canAddGroupQuestions = manageGroups.length > 0;
+
+  // Tracks the form can offer: for a shared question, those of the group it is going to; otherwise personal ones.
   const groupSubjects = useMemo(
-    () => subjects.filter((s) => s.scope === "group"),
-    [subjects]
+    () => subjects.filter((s) => s.scope === "group" && (!modalGroupId || s.groupId === modalGroupId)),
+    [subjects, modalGroupId]
   );
-  const personalSubjects = useMemo(
-    () => subjects.filter((s) => s.scope === "personal"),
-    [subjects]
-  );
+  const personalSubjects = useMemo(() => subjects.filter((s) => s.scope === "personal"), [subjects]);
   const modalSubjects = scope === "group" ? groupSubjects : personalSubjects;
-  const trackOptions = editingId ? subjects.filter((s) => s.scope === scope) : modalSubjects;
+  const trackOptions = editingId
+    ? subjects.filter((s) => s.scope === scope && (scope === "personal" || s.groupId === modalGroupId))
+    : modalSubjects;
 
-  const activeGroupId = user?.activeGroupId;
+  /** Which group a new shared question defaults to: the one being viewed, else your current group, else any you manage. */
+  const defaultGroupId = useCallback(() => {
+    if (groupFilter !== "all" && manageGroups.some((g) => g._id === groupFilter)) return groupFilter;
+    return (manageGroups.find((g) => g._id === user?.activeGroupId) ?? manageGroups[0])?._id ?? "";
+  }, [groupFilter, manageGroups, user?.activeGroupId]);
 
-  // Subjects + role rarely change: fetch once per group (and after edits that need it), not per page/filter.
+  // Your groups and every track (shared tracks of all your groups, plus your personal ones). Rarely changes.
   const loadMeta = useCallback(async () => {
-    if (!activeGroupId) return;
     try {
-      const [subjectData, groupHeader] = await Promise.all([
-        apiGet<Subject[]>(`/api/subjects?groupId=${activeGroupId}&minimal=1`, { onCached: setSubjects }),
-        apiGet<{ myRole: GroupRole | null }>(`/api/groups/${activeGroupId}?view=header`),
-      ]);
-      setSubjects(subjectData);
-      setCanAddGroupQuestions(canManageGroup(groupHeader.myRole));
+      const list = await apiGet<{ _id: string; name: string; myRole: GroupRole | null }[]>("/api/groups", {
+        onCached: (c) => setGroups(c.map((g) => ({ _id: g._id, name: g.name, myRole: g.myRole }))),
+      });
+      setGroups(list.map((g) => ({ _id: g._id, name: g.name, myRole: g.myRole })));
+      const lists = await Promise.all(
+        list.length
+          ? list.map((g) => apiGet<Subject[]>(`/api/subjects?groupId=${g._id}&minimal=1`))
+          : [apiGet<Subject[]>("/api/subjects?scope=personal&minimal=1")]
+      );
+      const unique = new Map<string, Subject>();
+      lists.flat().forEach((sub) => unique.set(sub._id, sub));
+      setSubjects(Array.from(unique.values()));
       setError("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load questions");
+    } finally {
+      setGroupsLoaded(true);
     }
-  }, [activeGroupId]);
+  }, []);
 
   const load = useCallback(async () => {
-    if (!activeGroupId) {
-      setLoading(false);
-      setInitialLoad(false);
-      return;
-    }
     setLoading(true);
     try {
       const searchQ = debouncedSearch.trim()
         ? `&search=${encodeURIComponent(debouncedSearch.trim())}`
         : "";
-      const questionUrl = `/api/practice-questions?groupId=${activeGroupId}&scope=${scopeFilter}${statusFilter.length ? `&status=${statusFilter.join(",")}` : ""}${subjectFilter.length ? `&subjectId=${subjectFilter.join(",")}` : ""}${dateFrom ? `&dateFrom=${dateFrom}` : ""}${dateTo ? `&dateTo=${dateTo}` : ""}&page=${page}&limit=${PAGE_SIZE}&period=${datePeriod}&sortBy=${sortBy}&sortDir=${sortDir}${searchQ}`;
+      const groupQ = tab === "group" ? `&groupId=${groupFilter}` : "";
+      const questionUrl = `/api/practice-questions?scope=${tab}${groupQ}${statusFilter.length ? `&status=${statusFilter.join(",")}` : ""}${subjectFilter.length ? `&subjectId=${subjectFilter.join(",")}` : ""}${dateFrom ? `&dateFrom=${dateFrom}` : ""}${dateTo ? `&dateTo=${dateTo}` : ""}&page=${page}&limit=${PAGE_SIZE}&period=${datePeriod}&sortBy=${sortBy}&sortDir=${sortDir}${searchQ}`;
       const questionData = await apiGet<PagedQuestions>(questionUrl, {
         onCached: (c) => {
           setQuestions(c.items);
@@ -192,7 +203,7 @@ export default function QuestionsPage() {
       setLoading(false);
       setInitialLoad(false);
     }
-  }, [activeGroupId, page, datePeriod, sortBy, sortDir, debouncedSearch, scopeFilter, statusFilter, subjectFilter, dateFrom, dateTo]);
+  }, [tab, groupFilter, page, datePeriod, sortBy, sortDir, debouncedSearch, statusFilter, subjectFilter, dateFrom, dateTo]);
 
   useEffect(() => { loadMeta(); }, [loadMeta]);
   useEffect(() => { load(); }, [load]);
@@ -200,6 +211,15 @@ export default function QuestionsPage() {
   useEffect(() => {
     setPage(1);
   }, [debouncedSearch]);
+
+  // A group you are no longer in can't stay selected as the filter.
+  useEffect(() => {
+    if (groupFilter !== "all" && groupsLoaded && !groups.some((g) => g._id === groupFilter)) setGroupFilter("all");
+  }, [groups, groupFilter, groupsLoaded]);
+
+  useEffect(() => {
+    if (!modalGroupId && manageGroups.length > 0) setModalGroupId(defaultGroupId());
+  }, [modalGroupId, manageGroups, defaultGroupId]);
 
   useEffect(() => {
     const available = scope === "group" ? groupSubjects : personalSubjects;
@@ -209,10 +229,10 @@ export default function QuestionsPage() {
   }, [scope, groupSubjects, personalSubjects, subjectId]);
 
   useEffect(() => {
-    if (!canAddGroupQuestions && scope === "group") {
+    if (groupsLoaded && !canAddGroupQuestions && scope === "group") {
       setScope("personal");
     }
-  }, [canAddGroupQuestions, scope]);
+  }, [groupsLoaded, canAddGroupQuestions, scope]);
 
   const handleSort = (field: QuestionSortField) => {
     const next = toggleQuestionSort(field, sortBy, sortDir);
@@ -227,16 +247,21 @@ export default function QuestionsPage() {
     setQuestionDescription("");
     setLink("");
     setPracticeDate("");
-    setScope(canAddGroupQuestions ? "group" : "personal");
+    // A new question goes to the tab you are on (a personal one if you can't add shared questions).
+    const nextScope: ContentScope = tab === "group" && canAddGroupQuestions ? "group" : "personal";
+    const gid = defaultGroupId();
+    setScope(nextScope);
+    setModalGroupId(gid);
     setSubjectId(
-      (canAddGroupQuestions ? groupSubjects[0] : personalSubjects[0])?._id ??
-        personalSubjects[0]?._id ??
-        ""
+      (nextScope === "group"
+        ? subjects.find((s) => s.scope === "group" && s.groupId === gid)
+        : subjects.find((s) => s.scope === "personal"))?._id ?? ""
     );
   };
 
   const openCreateModal = () => {
     resetForm();
+    if (tab === "group" && !canAddGroupQuestions) setTab("personal");
     setShowModal(true);
   };
 
@@ -250,6 +275,7 @@ export default function QuestionsPage() {
     setLink(full.link ?? "");
     setPracticeDate(questionPracticeDay(full));
     setScope(full.scope);
+    setModalGroupId(full.scope === "group" ? String(full.groupId ?? "") : defaultGroupId());
     setSubjectId(full.subjectId);
     setShowModal(true);
   };
@@ -260,7 +286,9 @@ export default function QuestionsPage() {
   };
 
   const saveQuestion = async () => {
-    if (!questionTitle.trim() || !subjectId || !user?.activeGroupId) return;
+    // Shared questions go to the chosen group. Personal ones still need a group on record, so use the current one.
+    const targetGroupId = scope === "group" ? modalGroupId : (user?.activeGroupId ?? groups[0]?._id ?? "");
+    if (!questionTitle.trim() || !subjectId || !targetGroupId) return;
     const payload = {
       title: questionTitle.trim(),
       description: questionDescription.trim(),
@@ -293,7 +321,7 @@ export default function QuestionsPage() {
         toast.success("Question updated");
       } else {
         await apiPost("/api/practice-questions", {
-          groupId: user.activeGroupId,
+          groupId: targetGroupId,
           scope,
           ...payload,
         });
@@ -362,10 +390,10 @@ export default function QuestionsPage() {
     }
   };
 
-  if (user && !user.activeGroupId) {
+  if (groupsLoaded && groups.length === 0) {
     return (
       <EmptyState
-        title="No active group"
+        title="No group yet"
         description="Join or create a group to start tracking practice questions."
         action={
           <Button href="/groups">Browse Groups</Button>
@@ -404,6 +432,37 @@ export default function QuestionsPage() {
       </div>
 
       <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {(["group", "personal"] as ContentScope[]).map((t) => (
+            <Chip
+              key={t}
+              variant="brand"
+              active={tab === t}
+              onClick={() => {
+                setTab(t);
+                setPage(1);
+                setSubjectFilter([]); // tracks differ between the two tabs
+              }}
+              className="!px-4 !py-1.5 !text-sm"
+            >
+              {t === "group" ? "Group" : "Personal"}
+            </Chip>
+          ))}
+          {/* Only offered when there is something to choose between. */}
+          {tab === "group" && groups.length > 1 && (
+            <Select
+              className="w-56"
+              value={groupFilter}
+              onChange={(g) => {
+                setGroupFilter(g);
+                setPage(1);
+                setSubjectFilter([]);
+              }}
+              aria-label="Show questions from"
+              options={[{ value: "all", label: "All groups" }, ...groups.map((g) => ({ value: g._id, label: g.name }))]}
+            />
+          )}
+        </div>
         <div className="flex flex-wrap items-center justify-between gap-2">
         <QuestionTableSearch
           value={searchInput}
@@ -481,7 +540,7 @@ export default function QuestionsPage() {
             pointBurst={pointBurst}
             onEdit={openEditModal}
             onDelete={deleteQuestion}
-            showScope
+            showGroup={tab === "group" && groups.length > 1}
             showActions
             sortBy={sortBy}
             sortDir={sortDir}
@@ -509,18 +568,6 @@ export default function QuestionsPage() {
 
       <Modal open={showFilters} onClose={() => setShowFilters(false)} title="Filters" size="sm">
         <div className="space-y-4">
-          <FilterRow label="Scope">
-            <Select
-              value={draft.scope}
-              onChange={(v) => setDraft((d) => ({ ...d, scope: v as "all" | ContentScope }))}
-              aria-label="Scope"
-              options={[
-                { value: "all", label: "All" },
-                { value: "group", label: "Group" },
-                { value: "personal", label: "Personal" },
-              ]}
-            />
-          </FilterRow>
           <FilterRow label="Status">
             <MultiSelect
               placeholder="All statuses"
@@ -532,7 +579,9 @@ export default function QuestionsPage() {
           <FilterRow label="Track">
             <MultiSelect
               placeholder="All tracks"
-              options={subjects.map((sb) => ({ value: sb._id, label: sb.name }))}
+              options={subjects
+                .filter((sb) => sb.scope === tab && (tab === "personal" || groupFilter === "all" || sb.groupId === groupFilter))
+                .map((sb) => ({ value: sb._id, label: sb.name }))}
               value={draft.subject}
               onChange={(next) => setDraft((d) => ({ ...d, subject: next }))}
             />
@@ -569,7 +618,7 @@ export default function QuestionsPage() {
             start={
               <Button
                 variant="outline"
-                onClick={() => setDraft({ scope: "all", status: [], subject: [], from: "", to: "" })}
+                onClick={() => setDraft({ status: [], subject: [], from: "", to: "" })}
               >
                 Reset
               </Button>
@@ -605,10 +654,16 @@ export default function QuestionsPage() {
         scopeHint={!editingId && !canAddGroupQuestions ? "Group questions require admin or co-admin." : undefined}
         saving={saving}
         onSave={saveQuestion}
+        groupOptions={manageGroups.map((g) => ({ value: g._id, label: g.name }))}
+        groupId={modalGroupId}
+        onGroupChange={(g) => {
+          setModalGroupId(g);
+          setSubjectId(""); // tracks belong to a group: pick again from that group's tracks
+        }}
         onCreateTrack={async (name) => {
           try {
             await apiPost("/api/subjects", {
-              ...(scope === "group" ? { groupId: activeGroupId } : {}),
+              ...(scope === "group" ? { groupId: modalGroupId } : {}),
               name,
               scope,
             });
