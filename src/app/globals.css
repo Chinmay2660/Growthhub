@@ -367,9 +367,12 @@ body {
     box-shadow: 0 1px 2px color-mix(in srgb, var(--accent) 35%, transparent);
   }
 
-  /* White on the lighter dark-theme accent is only ~3:1, so use dark text on the filled toggle. */
+  /* Selected tabs keep white text in dark mode too. The lighter dark-theme accent only gives ~3:1 with white,
+     so the fill uses the deeper brand orange (white on it is ~5.6:1). */
   .dark .chip-brand.chip-toggle.chip-active {
-    color: #1a1714 !important;
+    background: #a84d1f !important;
+    color: #fff !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
   }
 
   .chip-success {

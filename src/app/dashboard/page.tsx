@@ -16,6 +16,7 @@ import dynamic from "next/dynamic";
 const NotesInbox = dynamic(() => import("@/components/groups/NotesInbox"), { ssr: false });
 import TodayPlanCard from "@/components/dashboard/TodayPlanCard";
 import TodayHero from "@/components/dashboard/TodayHero";
+import RealityCheck from "@/components/dashboard/RealityCheck";
 import OverdueCard from "@/components/dashboard/OverdueCard";
 import GroupPulse from "@/components/dashboard/GroupPulse";
 import NextMockCard from "@/components/dashboard/NextMockCard";
@@ -156,6 +157,12 @@ export default function DashboardPage() {
       />
 
       <TodayHero data={data} firstName={user?.name?.split(" ")[0]} />
+
+      <RealityCheck
+        targetCtcLpa={user?.targetCtcLpa}
+        targetCompany={user?.targetCompany}
+        targetRole={user?.targetRole}
+      />
 
       <OverdueCard overdue={data.overdue} />
 
