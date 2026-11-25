@@ -143,6 +143,7 @@ export default function TodayPlanCard({
   const groupCount = todayQuestions.group.length;
   const personalCount = todayQuestions.personal.length;
   const total = groupCount + personalCount;
+  const overdueCount = [...todayQuestions.group, ...todayQuestions.personal].filter((q) => q.overdueDays).length;
 
   return (
     <Card>
@@ -150,8 +151,8 @@ export default function TodayPlanCard({
         title="Today's Questions"
         subtitle={
           total === 0
-            ? "No questions scheduled for today"
-            : `${groupCount} group · ${personalCount} personal`
+            ? "Nothing due today and nothing overdue"
+            : `${groupCount} group · ${personalCount} personal${overdueCount ? ` · ${overdueCount} overdue` : ""}`
         }
         action={
           <Button href="/questions" variant="outline" size="sm">View All</Button>
@@ -159,11 +160,11 @@ export default function TodayPlanCard({
       />
       {total === 0 ? (
         <p className="text-sm text-[var(--muted)]">
-          Add group or personal questions with today&apos;s practice date to see them here. Use{" "}
+          You&apos;re all caught up. Set a practice date of today on a question in{" "}
           <Link href="/questions" className="text-brand hover:underline">
-            Questions → Today
+            Questions
           </Link>{" "}
-          or set a practice date on unscheduled items.
+          and it will show up here, along with anything overdue.
         </p>
       ) : (
         <div className="space-y-6">

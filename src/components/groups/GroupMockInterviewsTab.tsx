@@ -1,5 +1,6 @@
 "use client";
 
+import { useRevalidate } from "@/lib/use-revalidate";
 import { useCallback, useEffect, useState } from "react";
 import { Input, Textarea } from "@/components/ui/Input";
 import Link from "next/link";
@@ -98,6 +99,9 @@ export default function GroupMockInterviewsTab({
 }) {
   const [schedule, setSchedule] = useState<MockInterviewSchedule | null>(null);
   const [activeRoundId, setActiveRoundId] = useState("");
+  // The current round once its date has passed and everyone has finished: it belongs under Past, even though
+  // a new round has not been started yet.
+  const [finishedRoundId, setFinishedRoundId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedId, setSelectedId] = useState("");
@@ -157,11 +161,20 @@ export default function GroupMockInterviewsTab({
   useEffect(() => {
     load(activeRoundId || undefined);
   }, [load, activeRoundId]);
+  useRevalidate(() => void load(activeRoundId || undefined, true));
 
   const selected = schedule?.members.find((m) => m.userId === selectedId) ?? null;
   const activeRound = schedule?.rounds.find((r) => r._id === schedule.activeRoundId);
   const isHistory = viewMode === "history" || (schedule?.isViewingHistory ?? false);
-  const pastRounds = schedule?.rounds.filter((r) => !r.isCurrent) ?? [];
+  const pastRounds = schedule?.rounds.filter((r) => !r.isCurrent || r._id === finishedRoundId) ?? [];
+
+  useEffect(() => {
+    if (!schedule || schedule.activeRoundId !== schedule.currentRoundId) return; // only known for the round on screen
+    const round = schedule.rounds.find((r) => r._id === schedule.currentRoundId);
+    const passed = Boolean(round?.interviewDate) && new Date(round!.interviewDate!).getTime() < Date.now();
+    const everyoneDone = schedule.members.length > 0 && schedule.members.every((m) => m.status === "completed");
+    setFinishedRoundId(passed && everyoneDone ? schedule.currentRoundId : null);
+  }, [schedule]);
 
   const switchViewMode = (mode: ViewMode) => {
     setViewMode(mode);
@@ -352,7 +365,7 @@ export default function GroupMockInterviewsTab({
                   <ProgressRing value={completionPct} size={88} />
                   <div className="min-w-0">
                     <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-                      {viewMode === "history" ? "Past round" : "Upcoming round"}
+                      {viewMode === "history" ? "Past round" : activeRound && activeRound._id === finishedRoundId ? "Round complete" : "Upcoming round"}
                     </p>
                     <p className="mt-0.5 text-lg font-bold text-[var(--foreground)] sm:text-xl">
                       {roundDateLabel}

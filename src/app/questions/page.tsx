@@ -1,5 +1,6 @@
 "use client";
 
+import { useRevalidate, markQuiet, takeQuiet } from "@/lib/use-revalidate";
 import { useDocumentTitle } from "@/lib/use-document-title";
 import { useEffect, useState, useCallback, useMemo, useId } from "react";
 import { useUser } from "@/components/providers/UserProvider";
@@ -24,7 +25,6 @@ import {
   joinQuestionFields,
   splitQuestionFields,
   questionPracticeDay,
-  QUESTION_DATE_PERIODS,
   normalizeQuestionStatus,
   DEFAULT_QUESTION_TABLE_SORT,
   toggleQuestionSort,
@@ -75,7 +75,7 @@ export default function QuestionsPage() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [datePeriod, setDatePeriod] = useState<QuestionDatePeriod>("today");
+  const datePeriod: QuestionDatePeriod = "all"; // everything, newest first; narrow it with the date range in Filters
   const [sortBy, setSortBy] = useState<QuestionSortField>(DEFAULT_QUESTION_TABLE_SORT.sortBy);
   const [sortDir, setSortDir] = useState<QuestionSortDir>(DEFAULT_QUESTION_TABLE_SORT.sortDir);
   const [loading, setLoading] = useState(true);
@@ -101,7 +101,6 @@ export default function QuestionsPage() {
   const [subjectFilter, setSubjectFilter] = useState<string[]>([]);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const hasDateRange = Boolean(dateFrom || dateTo);
   const activeFilterCount =
     (statusFilter.length ? 1 : 0) +
     (subjectFilter.length ? 1 : 0) +
@@ -121,7 +120,6 @@ export default function QuestionsPage() {
     setSubjectFilter(draft.subject);
     setDateFrom(draft.from);
     setDateTo(draft.to);
-    if (draft.from || draft.to) setDatePeriod("all");
     setPage(1);
     setShowFilters(false);
   };
@@ -180,7 +178,7 @@ export default function QuestionsPage() {
   }, []);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    if (!takeQuiet()) setLoading(true);
     try {
       const searchQ = debouncedSearch.trim()
         ? `&search=${encodeURIComponent(debouncedSearch.trim())}`
@@ -207,6 +205,10 @@ export default function QuestionsPage() {
 
   useEffect(() => { loadMeta(); }, [loadMeta]);
   useEffect(() => { load(); }, [load]);
+  useRevalidate(() => {
+    markQuiet();
+    void load();
+  });
 
   useEffect(() => {
     setPage(1);
@@ -486,26 +488,6 @@ export default function QuestionsPage() {
           )}
         </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {QUESTION_DATE_PERIODS.map(({ id, label }) => (
-            <Chip
-              key={id}
-              variant="brand"
-              // A custom From/To range replaces the quick tabs, so none is highlighted while it's active.
-              active={!hasDateRange && datePeriod === id}
-              onClick={() => {
-                // Picking a tab drops the custom range, otherwise the range would keep overriding it.
-                setDateFrom("");
-                setDateTo("");
-                setDatePeriod(id);
-                setPage(1);
-              }}
-              className="!px-3 !py-1.5 !text-sm"
-            >
-              {label}
-            </Chip>
-          ))}
-        </div>
       </div>
 
       {questions.length === 0 && !loading ? (
@@ -555,11 +537,6 @@ export default function QuestionsPage() {
             pageSize={PAGE_SIZE}
             loading={loading}
             onPageChange={setPage}
-            summaryExtra={
-              datePeriod !== "all"
-                ? QUESTION_DATE_PERIODS.find((p) => p.id === datePeriod)?.label
-                : undefined
-            }
           />
         </>
       )}

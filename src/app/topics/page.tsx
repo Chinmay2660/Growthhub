@@ -1,5 +1,6 @@
 "use client";
 
+import { useRevalidate, markQuiet, takeQuiet } from "@/lib/use-revalidate";
 import { useDocumentTitle } from "@/lib/use-document-title";
 import { useEffect, useState, useCallback, Suspense } from "react";
 import { Input } from "@/components/ui/Input";
@@ -40,7 +41,7 @@ function TopicsContent() {
       setSubjects([]);
       return;
     }
-    setLoading(true);
+    if (!takeQuiet()) setLoading(true);
     try {
       const subjectUrl =
         tab === "group"
@@ -74,6 +75,10 @@ function TopicsContent() {
   }, [user, subjectFilter, tab]);
 
   useEffect(() => { load(); }, [load]);
+  useRevalidate(() => {
+    markQuiet();
+    void load();
+  });
 
   const createTopic = async () => {
     if (!newName.trim() || !newSubjectId || !user?.activeGroupId) return;

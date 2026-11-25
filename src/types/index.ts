@@ -346,6 +346,8 @@ export interface TodayQuestion {
   trackLabel: string;
   status: QuestionStatus;
   practiceDate?: string;
+  /** Set when the question was scheduled before today and is still unsolved. */
+  overdueDays?: number;
   link?: string;
 }
 

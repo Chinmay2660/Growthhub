@@ -7,10 +7,8 @@ import { Input } from "@/components/ui/Input";
 import {
   Check,
   Copy,
-  Download,
   KeyRound,
   LogOut,
-  ShieldCheck,
   Trash2,
   UserRound,
   Monitor,
@@ -142,9 +140,6 @@ export default function SettingsPage() {
   const [profileErrors, setProfileErrors] = useState<Partial<Record<ProfileField, string>>>({});
   const [profileSaving, setProfileSaving] = useState(false);
 
-  const [recoveryKey, setRecoveryKey] = useState<string | null>(null);
-  const [recoveryBusy, setRecoveryBusy] = useState(false);
-  const [exporting, setExporting] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteInput, setDeleteInput] = useState("");
   const [deleting, setDeleting] = useState(false);
@@ -261,56 +256,6 @@ export default function SettingsPage() {
       toast.error(message);
     } finally {
       setProfileSaving(false);
-    }
-  };
-
-  const createRecoveryKey = async () => {
-    if (isGuest) return;
-    setRecoveryBusy(true);
-    try {
-      const result = await apiPost<{ recoveryKey: string }>("/api/auth/recovery-key");
-      setRecoveryKey(result.recoveryKey);
-      toast.success("New recovery key created");
-    } catch (err) {
-      toast.error(getErrorMessage(err, "Failed to create recovery key"));
-    } finally {
-      setRecoveryBusy(false);
-    }
-  };
-
-  const copyRecoveryKey = async () => {
-    if (!recoveryKey) return;
-    try {
-      await navigator.clipboard.writeText(recoveryKey);
-      toast.success("Recovery key copied");
-    } catch {
-      toast.error("Could not copy. Select the key and copy it manually.");
-    }
-  };
-
-  const downloadData = async () => {
-    if (isGuest || !user) return;
-    setExporting(true);
-    try {
-      const res = await fetch(`/api/users/${user._id}/export`, { credentials: "include", cache: "no-store" });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || `Export failed with status ${res.status}`);
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `growthhub-export-${new Date().toISOString().slice(0, 10)}.json`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      toast.success("Your data was downloaded");
-    } catch (err) {
-      toast.error(getErrorMessage(err, "Failed to download your data"));
-    } finally {
-      setExporting(false);
     }
   };
 
@@ -688,57 +633,6 @@ export default function SettingsPage() {
 
       {!isGuest && (
         <>
-          <SettingsGroup
-            icon={ShieldCheck}
-            title="Recovery key"
-            description="The only way back in if you forget your 6-digit code."
-          >
-            {recoveryKey ? (
-              <div className="rounded-xl border border-brand/30 bg-brand/5 p-4 text-center">
-                <p className="select-all break-all font-mono text-xl font-bold tracking-[0.15em] text-brand">
-                  {recoveryKey}
-                </p>
-                <p className="mt-2 text-xs text-[var(--muted)]">
-                  Save this now, it will not be shown again. Any earlier recovery key no longer works.
-                </p>
-                <div className="mt-3 flex justify-center gap-2">
-                  <Button type="button" variant="outline" size="sm" onClick={copyRecoveryKey}>
-                    <Copy className="mr-1.5 h-3.5 w-3.5" aria-hidden />
-                    Copy key
-                  </Button>
-                  <Button type="button" variant="ghost" size="sm" onClick={() => setRecoveryKey(null)}>
-                    Done
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-sm text-[var(--muted)]">
-                  Create a recovery key, or replace the one you have. Replacing it makes the old key stop working.
-                </p>
-                <Button type="button" variant="outline" size="sm" onClick={createRecoveryKey} loading={recoveryBusy}>
-                  {recoveryBusy ? "Creating…" : "Create or replace recovery key"}
-                </Button>
-              </div>
-            )}
-          </SettingsGroup>
-
-          <SettingsGroup
-            icon={Download}
-            title="Your data"
-            description="Download a copy of everything GrowthHub stores about you."
-          >
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm text-[var(--muted)]">
-                A JSON file with your profile, groups, personal tracks, questions, progress and mock interview results.
-              </p>
-              <Button type="button" variant="outline" size="sm" onClick={downloadData} loading={exporting}>
-                <Download className="mr-1.5 h-3.5 w-3.5" aria-hidden />
-                {exporting ? "Preparing…" : "Download my data"}
-              </Button>
-            </div>
-          </SettingsGroup>
-
           <section
             aria-labelledby="danger-zone-title"
             className="rounded-xl border border-danger/40 bg-danger/5 p-5"

@@ -38,6 +38,12 @@ export default function ServiceWorkerRegister() {
     void navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {});
   }, []);
 
+  // Data warm-up needs no service worker, so it also runs in development and on browsers without one.
+  useEffect(() => {
+    if (!signedIn || !userId || ("serviceWorker" in navigator && process.env.NODE_ENV === "production")) return;
+    void warmOfflineData(userId, activeGroupId);
+  }, [signedIn, userId, activeGroupId]);
+
   useEffect(() => {
     if (process.env.NODE_ENV !== "production" || !signedIn || !("serviceWorker" in navigator)) return;
     let cancelled = false;

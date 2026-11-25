@@ -1,5 +1,6 @@
 "use client";
 
+import { useRevalidate } from "@/lib/use-revalidate";
 import { useCallback, useEffect, useState } from "react";
 import { BellRing, Check } from "lucide-react";
 import Card, { CardHeader } from "@/components/ui/Card";
@@ -67,6 +68,7 @@ export default function NotesInbox({
   useEffect(() => {
     void load();
   }, [load]);
+  useRevalidate(() => void load());
 
   const markRead = async (ids?: string[]) => {
     // Update the screen first; the request only records it.

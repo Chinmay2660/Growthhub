@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import Card, { CardHeader } from "@/components/ui/Card";
 import { apiGet } from "@/lib/api";
 
@@ -20,14 +20,15 @@ const DIMENSIONS = [
 const SCORE_COLOR = "#94a3b8";
 
 const MAX_RATING = 5;
-const PLOT_H = 150;
+const PLOT_H = 220;
 const TOP = 18; // room for the value label above the tallest bar
 const LEFT = 26;
 const RIGHT = 8;
 // below the bars: overall score bar, its number, the round label and the reviewer count
 const SCORE_ROW = 64;
 const BOTTOM = SCORE_ROW;
-const MIN_SLOT = 84; // below this per round the chart scrolls sideways instead of squeezing
+const MIN_SLOT = 84;
+const MAX_SLOT = 320; // a single round should not stretch across the whole card // below this per round the chart scrolls sideways instead of squeezing
 const BAR_GAP = 4;
 const H = TOP + PLOT_H + BOTTOM;
 
@@ -36,17 +37,16 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 
 /** Tracks an element's width so the chart can use all the space the card gives it. */
 function useWidth<T extends HTMLElement>() {
-  const ref = useRef<T>(null);
+  const [node, setNode] = useState<T | null>(null);
   const [width, setWidth] = useState(0);
   useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    setWidth(el.clientWidth);
+    if (!node) return;
+    setWidth(node.clientWidth);
     const ro = new ResizeObserver(([entry]) => setWidth(Math.round(entry.contentRect.width)));
-    ro.observe(el);
+    ro.observe(node);
     return () => ro.disconnect();
-  }, []);
-  return [ref, width] as const;
+  }, [node]);
+  return [setNode, width] as const;
 }
 
 /**
@@ -88,13 +88,14 @@ export default function RubricTrendChart({
 
   const n = Math.max(points.length, 1);
   const avail = Math.max(wrapWidth - LEFT - RIGHT, 0);
-  const slotW = Math.max(avail / n, MIN_SLOT);
-  const width = LEFT + RIGHT + slotW * n;
+  const slotW = clamp(avail / n, MIN_SLOT, MAX_SLOT);
+  const width = LEFT + RIGHT + Math.max(avail, slotW * n);
+  const offset = Math.max(0, (avail - slotW * n) / 2); // centre the rounds when there are few
   // bars grow with the room available, but stay readable and never fill the whole slot
-  const barW = clamp((slotW * 0.62 - BAR_GAP * (DIMENSIONS.length - 1)) / DIMENSIONS.length, 10, 34);
+  const barW = clamp((slotW * 0.62 - BAR_GAP * (DIMENSIONS.length - 1)) / DIMENSIONS.length, 10, 52);
   const groupW = DIMENSIONS.length * barW + (DIMENSIONS.length - 1) * BAR_GAP;
   const y = (v: number) => TOP + PLOT_H - (v / MAX_RATING) * PLOT_H;
-  const scoreTrackW = Math.min(slotW * 0.6, 120);
+  const scoreTrackW = Math.min(slotW * 0.7, 160);
 
   const hasRubric = (p: Point) => DIMENSIONS.some((d) => p.rubric[d.key] != null);
   const owner = name ? `${name}'s` : "Your";
@@ -140,7 +141,7 @@ export default function RubricTrendChart({
                 </g>
               ))}
               {points.map((p, i) => {
-                const cx = LEFT + i * slotW + slotW / 2; // centre of this round's slot
+                const cx = LEFT + offset + i * slotW + slotW / 2; // centre of this round's slot
                 const gx = cx - groupW / 2;
                 const rubric = hasRubric(p);
                 const base = TOP + PLOT_H;

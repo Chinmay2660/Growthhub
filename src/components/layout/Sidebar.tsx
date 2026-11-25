@@ -8,6 +8,7 @@ import { useUser } from "@/components/providers/UserProvider";
 import AppLogo from "@/components/ui/AppLogo";
 import ThemeToggle from "@/components/ui/ThemeToggle";
 import GroupSwitcher from "./GroupSwitcher";
+import { prefetchRoute } from "@/lib/offline-warmup";
 import { useUnreadNotes } from "@/lib/use-unread-notes";
 import { openCareerFlow } from "@/lib/apps-client";
 import { buildMainNav, isExternalNavItem, isNavItemActive } from "./nav-config";
@@ -57,6 +58,8 @@ export default function Sidebar() {
             <Link
               key={item.id}
               href={item.href}
+              onPointerEnter={() => prefetchRoute(item.href, user?.activeGroupId)}
+              onFocus={() => prefetchRoute(item.href, user?.activeGroupId)}
               className={navItemClass(active)}
               aria-current={active ? "page" : undefined}
             >

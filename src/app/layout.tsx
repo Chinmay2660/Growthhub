@@ -5,6 +5,8 @@ import { ThemeProvider, ThemeSync } from "@/components/providers/ThemeProvider";
 import { UserProvider } from "@/components/providers/UserProvider";
 import { ConfirmProvider } from "@/components/providers/ConfirmProvider";
 import AppShell from "@/components/layout/AppShell";
+import SplashScreen from "@/components/layout/SplashScreen";
+import RouteProgress from "@/components/layout/RouteProgress";
 import ServiceWorkerRegister from "@/components/providers/ServiceWorkerRegister";
 import ClientToaster from "@/components/ui/ClientToaster";
 import "./globals.css";
@@ -37,8 +39,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <UserProvider>
               <ThemeSync />
               <ServiceWorkerRegister />
+              <RouteProgress />
               <AppShell>{children}</AppShell>
               <ClientToaster />
+              <SplashScreen />
             </UserProvider>
           </ConfirmProvider>
         </ThemeProvider>

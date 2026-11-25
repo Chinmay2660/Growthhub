@@ -56,7 +56,7 @@ export async function GET(request: Request) {
     const countdown = getInterviewCountdown(interviewGroup?.interviewDate);
 
     const [todayQuestions, subjects, groupQuestions, personalQuestions] = await Promise.all([
-      getTodayQuestionsForUser(userId, groupIds),
+      getTodayQuestionsForUser(userId, groupIds, { includeOverdue: true }),
       Subject.find({
         $or: [
           { groupId: { $in: groupIds }, scope: "group", isActive: true },

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRevalidate } from "@/lib/use-revalidate";
 import { useDocumentTitle } from "@/lib/use-document-title";
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
@@ -62,6 +63,7 @@ export default function GroupsPage() {
   }, [user?._id]);
 
   useEffect(() => { load(); }, [load]);
+  useRevalidate(() => void load({ silent: true }));
 
   const [switchingId, setSwitchingId] = useState<string | null>(null);
   const makeActive = async (groupId: string) => {

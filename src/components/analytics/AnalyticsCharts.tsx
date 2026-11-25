@@ -57,7 +57,7 @@ export default function AnalyticsCharts({ data, currentUserId }: AnalyticsCharts
           <h2 className="text-lg font-semibold text-[var(--foreground)]">Group</h2>
           <p className="text-sm text-[var(--muted)]">Shared questions and team progress.</p>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-3">
           <StatCard
             label="Group done"
             value={`${group.summary.yourDone}/${group.summary.totalQuestions}`}
@@ -66,13 +66,12 @@ export default function AnalyticsCharts({ data, currentUserId }: AnalyticsCharts
           <StatCard label="Questions solved" value={group.summary.yourPoints} />
           <StatCard label="Members" value={group.summary.memberCount} />
         </div>
-        <Card>
-          <CardHeader title="Group questions" subtitle="Your progress on shared questions" />
-          <StatusList rows={group.byStatus} />
-        </Card>
-        {group.leaderboard.length > 0 && (
-          <div className="grid gap-6 lg:grid-cols-2">
-            {group.leaderboard.length > 0 && (
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Card>
+            <CardHeader title="Group questions" subtitle="Your progress on shared questions" />
+            <StatusList rows={group.byStatus} />
+          </Card>
+          {group.leaderboard.length > 0 && (
               <Card>
                 <CardHeader title="Leaderboard" subtitle="Group questions solved" />
                 <ul className="space-y-2">
@@ -94,9 +93,8 @@ export default function AnalyticsCharts({ data, currentUserId }: AnalyticsCharts
                   ))}
                 </ul>
               </Card>
-            )}
-          </div>
-        )}
+          )}
+        </div>
       </section>
 
       <section className="space-y-4">

@@ -3,7 +3,7 @@
 import { TrendingDown, TrendingUp, Minus } from "lucide-react";
 import Card, { CardHeader } from "@/components/ui/Card";
 import ProgressBar from "@/components/ui/ProgressBar";
-import StudyHoursChart from "@/components/analytics/d3/StudyHoursChart";
+import BarColumns, { type BarItem } from "@/components/analytics/BarColumns";
 import { formatDate } from "@/lib/utils";
 import type { AnalyticsData } from "@/types";
 
@@ -25,6 +25,21 @@ export default function AnalyticsTrends({ data }: { data: AnalyticsData }) {
   const TrendIcon = delta > 0 ? TrendingUp : delta < 0 ? TrendingDown : Minus;
   const trendTone = delta > 0 ? "text-emerald-600" : delta < 0 ? "text-red-500" : "text-[var(--muted)]";
 
+  const dayItems: BarItem[] = days.map((d, i) => {
+    const noon = new Date(`${d.date}T12:00:00+05:30`);
+    return {
+      key: d.date,
+      label: noon.toLocaleDateString("en-IN", { weekday: "short", timeZone: "Asia/Kolkata" }),
+      sub: String(Number(d.date.slice(8, 10))),
+      value: d.count,
+      emphasis: i === days.length - 1, // today
+    };
+  });
+  const mockItems: BarItem[] = data.mockInterviewScores.map((m, i) => ({
+    key: `${m.date}-${i}`,
+    label: formatDate(m.date).slice(0, 6),
+    value: m.score,
+  }));
   const tracks = data.group.byTrack.filter((t) => t.total > 0);
   const mocks = data.mockInterviewScores;
 
@@ -49,10 +64,10 @@ export default function AnalyticsTrends({ data }: { data: AnalyticsData }) {
 
         <Card className="lg:col-span-2">
           <CardHeader title="Last 14 days" subtitle="Questions solved each day" />
-          <div className="mt-3 h-44">
-            <StudyHoursChart
-              data={days.map((d) => ({ label: d.label, value: d.count, date: d.date }))}
-              valueSuffix="solved"
+          <div className="mt-4">
+            <BarColumns
+              items={dayItems}
+              suffix="solved"
               ariaLabel={`Questions solved per day over the last ${days.length} days. This week ${current}, last week ${previous}.`}
             />
           </div>
@@ -82,10 +97,11 @@ export default function AnalyticsTrends({ data }: { data: AnalyticsData }) {
         {mocks.length > 0 && (
           <Card>
             <CardHeader title="Mock scores" subtitle="Your peer-scored mocks over time" />
-            <div className="mt-3 h-44">
-              <StudyHoursChart
-                data={mocks.map((m) => ({ label: formatDate(m.date).slice(0, 6), value: m.score }))}
-                valueSuffix="/ 100"
+            <div className="mt-4">
+              <BarColumns
+                items={mockItems}
+                max={100}
+                suffix="/ 100"
                 ariaLabel={`Mock interview scores: ${mocks.map((m) => m.score).join(", ")}.`}
               />
             </div>

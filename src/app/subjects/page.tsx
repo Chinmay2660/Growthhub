@@ -1,5 +1,6 @@
 "use client";
 
+import { useRevalidate, markQuiet, takeQuiet } from "@/lib/use-revalidate";
 import { useDocumentTitle } from "@/lib/use-document-title";
 import { useEffect, useState, useCallback } from "react";
 import Checkbox from "@/components/ui/Checkbox";
@@ -51,7 +52,7 @@ export default function SubjectsPage() {
       setCanManageGroupTracks(false);
       return;
     }
-    setLoading(true);
+    if (!takeQuiet()) setLoading(true);
     try {
       const url =
         tab === "group"
@@ -92,6 +93,10 @@ export default function SubjectsPage() {
   }, [user, tab]);
 
   useEffect(() => { load(); }, [load]);
+  useRevalidate(() => {
+    markQuiet();
+    void load();
+  });
 
   const resetForm = () => {
     setNewName("");

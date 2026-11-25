@@ -7,6 +7,18 @@ who is practising, who has hit today's goal, and cheering each other on.
 > **Identity:** personal progress tracking + group accountability + interview preparation. Features exist
 > to support one of those three things. There is deliberately no task manager and no study planner.
 
+## Quick start
+
+```bash
+npm install
+cp .env.example .env.local     # then set MONGODB_URI and SESSION_SECRET
+npm run dev                    # http://localhost:4000
+```
+
+Open the app and click **Try demo** on the login page (a shared demo group with members, questions, mock
+rounds and peer ratings is seeded for you), or register with a username and a 6-digit code. Full steps,
+environment variables and deployment are further down.
+
 ## Status legend
 
 | Label | Meaning |
@@ -25,10 +37,12 @@ Only what the code does today is listed. Known gaps are called out so nothing he
 |---------|--------|-------|
 | Practice questions (add, edit, delete, search, filter, sort, paginate) | Implemented | Filters by scope, status, track and date range. Statuses: Not Started, In Progress, Done, Revised |
 | One-click done | Implemented | A checkbox on every question row; the status menu is still there for In Progress or Revised |
-| Question date periods (Today, Tomorrow, Yesterday, This month, All) | Implemented | Default is **Today**; unscheduled questions appear under **All** |
+| Questions list | Implemented | Shows **All** questions (newest first); narrow by status, track or a From/To date range in Filters. Group / Personal tabs, with a group filter when you are in more than one group |
 | Daily question goal | Implemented | Set in Settings (1-50, default 3). The dashboard ring shows questions solved today against it |
 | Study streak | Implemented | Counts any day you practise or solve a question (IST). It drops to 0 after a missed day |
-| Overdue questions | Implemented | Scheduled before today and not solved: listed on the dashboard, oldest first |
+| Overdue questions | Implemented | Merged into **Today's Questions** on the dashboard: overdue items come first with a red "Overdue Nd" tag and highlighted row; solving one removes it |
+| Reality Check | Implemented | Dashboard card that auto-rotates a blunt motivational quote every 60 seconds (256 quotes incl. habit books; personalised from your CTC target in Settings) |
+| Accent colours | Implemented | Settings > Appearance: Light / Dark / System plus accent colour presets (AA contrast checked) |
 | Welcome-back summary | Implemented | After 3+ days away: how many questions are waiting and how many your group solved meanwhile |
 | Tracks with a target question count and progress | Implemented | Called **Tracks** in the app. Admins manage shared tracks; anyone manages their personal ones |
 | Topics with status and confidence per person | Implemented | Reached from the **Topics** button on the Tracks page. Revision dates are per person |
@@ -62,7 +76,7 @@ Only what the code does today is listed. Known gaps are called out so nothing he
 | Feature | Status | Notes |
 |---------|--------|-------|
 | Group mock date (IST) and add-to-calendar link | Implemented | Admins schedule; past dates are rejected |
-| Multiple rounds | Implemented | After a round happens, an admin can **Start next round**; earlier rounds stay in the Past tab |
+| Multiple rounds | Implemented | After a round happens, an admin can **Start next round**; earlier rounds stay in the Past tab. A round whose date has passed and where everyone is Completed is listed under Past straight away (labelled "Round complete" on the Upcoming tab, where Start next round lives) |
 | Question generation for each interviewee | Implemented | Rule-based from the person's done questions, weighted by confidence. No AI is used |
 | Peer scoring with a four-skill rubric and written feedback | Implemented | Any member except the interviewee, once per session. Rubric, feedback and weak spots are visible to the interviewee and the reviewer who wrote them |
 | Weak result queues revision | Implemented | A score under 70 marks the asked topics for revision for the interviewee only |
@@ -86,7 +100,7 @@ Only what the code does today is listed. Known gaps are called out so nothing he
 | Feature | Status | Notes |
 |---------|--------|-------|
 | Username and 6-digit login code | Implemented | The code is the password, stored as a salted scrypt hash |
-| Recovery key | Implemented | Shown once at sign-up (and when replaced). It lets you set a new login code if you forget it. Accounts that existed before this need to create one in Settings |
+| Recovery key | Implemented | Shown once at sign-up. It lets you set a new login code if you forget it (no longer managed from Settings) |
 | Google sign-in | Partial | Depends on the separate CareerFlow backend (see environment variables) |
 | Guest demo | Implemented | One **shared** account: every visitor sees and changes the same data, and can only change view preferences on the profile. Disabled in production unless `ALLOW_GUEST_AUTH=true` |
 | Onboarding (5 steps) | Implemented | Subjects typed when joining a group are kept as personal tracks |
@@ -105,7 +119,10 @@ Only what the code does today is listed. Known gaps are called out so nothing he
 | Per-page browser titles | Implemented | |
 | Local read cache and offline write queue (Dexie) | Implemented | Main screens paint cached data first. Offline edits to questions, tracks, topics and group notes replay in order; the server ignores repeated requests |
 | Service worker (production only) | Implemented | Caches pages with their scripts, plus icons, images and fonts. `/api` is never cached |
-| Background warm-up | Implemented | After sign-in the dashboard, questions, tracks, topics, analytics and each group's pages are prefetched |
+| Background warm-up | Implemented | Shortly after sign-in the dashboard, questions (default lists), tracks, topics, analytics and each group's pages are fetched in parallel |
+| Hover / touch prefetch | Implemented | Hovering, focusing or touching a nav link starts that screen's data requests before you open it |
+| Automatic refresh | Implemented | Open screens refresh quietly after any change you make, when you return to the tab, when the connection returns, and every 30 seconds while visible (that is how other members' changes arrive). No manual reload needed |
+| Splash screen and loaders | Implemented | Branded splash until your account loads, a top progress bar on navigation, per-page skeletons and a route-level loading skeleton |
 | Installable app (web manifest, icons) | Planned | |
 
 Offline mode is best-effort: admin group actions (edit group, members, invite codes, scheduling) always need
@@ -158,19 +175,36 @@ public/sw.js           Service worker (registered in production only)
 
 Requirements: Node.js 20 or newer and a MongoDB database (local or Atlas).
 
-```bash
-npm install
-cp .env.example .env.local
-# edit .env.local and set MONGODB_URI and SESSION_SECRET
-npm run dev
-```
+1. Install dependencies:
 
-Open <http://localhost:4000>. Use **Try demo** on the login page for the shared demo, or register with a
-username and a 6-digit code (and save the recovery key you are shown).
+   ```bash
+   npm install
+   ```
+
+2. Create your environment file and fill in the two required values (`MONGODB_URI`, `SESSION_SECRET`):
+
+   ```bash
+   cp .env.example .env.local
+   ```
+
+   Generate a secret with `openssl rand -hex 32` (or any long random string). `.env.example` documents every
+   variable, including the optional ones.
+
+3. Start the dev server:
+
+   ```bash
+   npm run dev
+   ```
+
+4. Open <http://localhost:4000>. Use **Try demo** for the shared demo, or register with a username and a
+   6-digit code (and save the recovery key you are shown).
+
+The demo data is seeded the first time someone uses **Try demo**. It is one shared account, so everyone using
+the same database sees the same data.
 
 ## Environment variables
 
-Set these in `.env.local` (never commit real values).
+Set these in `.env.local` (never commit real values); `.env.example` lists all of them with comments. In production, set the same names in the host's environment settings.
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
@@ -178,18 +212,20 @@ Set these in `.env.local` (never commit real values).
 | `SESSION_SECRET` | Yes in production | Signs session cookies. Use a long random value. It must match CareerFlow's secret if both apps share one login |
 | `ALLOW_GUEST_AUTH` | Production only | Set to `true` to allow the shared guest demo in production (always on in development) |
 | `GROWTHHUB_URL` | No | This app's public URL (default `http://localhost:4000`) |
-| `CAREERFLOW_URL`, `CAREERFLOW_API_URL`, `NEXT_PUBLIC_CAREERFLOW_URL` | No | CareerFlow app and API, for Google sign-in and the sidebar link (defaults `localhost:3000` and `localhost:8000`) |
+| `CAREERFLOW_URL`, `CAREERFLOW_API_URL`, `NEXT_PUBLIC_CAREERFLOW_URL` | No | CareerFlow app and API, for Google sign-in and the sidebar link (defaults `localhost:3000` and `localhost:8000`). Leave unset if you do not run CareerFlow |
 | `COOKIE_DOMAIN` | No | Share the session cookie across subdomains in production |
-| `RATE_LIMIT_ENABLED`, `AUTH_RATE_LIMIT_ENABLED` | No | Login rate limiting; on in production, off in development |
+| `RATE_LIMIT_ENABLED`, `AUTH_RATE_LIMIT_ENABLED` | No | Login rate limiting; on in production, off in development. Set `true` / `false` to override |
+| `JOB_TRACKER_URL`, `JOB_TRACKER_API_URL`, `NEXT_PUBLIC_JOB_TRACKER_URL`, `SWITCH_PREP_URL`, `NEXT_PUBLIC_APP_URL` | No | Older names, still read as fallbacks for the URLs above |
 
 ## Local development
 
 | Command | What it does |
 |---------|--------------|
-| `npm run dev` | Dev server on port 4000. The service worker is disabled and any old one is removed |
+| `npm run dev` | Dev server on port 4000. The service worker is disabled and any old one is removed (data warm-up and automatic refresh still run) |
 | `npm run build` | Production build |
 | `npm start` | Serve the production build |
 | `npm run lint` | ESLint |
+| `npx tsc --noEmit` | Type check |
 
 To try offline behaviour, use a production build (`npm run build && npm start`), sign in, browse a few
 pages, then switch the browser to offline in DevTools.

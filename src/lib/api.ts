@@ -14,6 +14,12 @@ export function getErrorMessage(err: unknown, fallback = "Something went wrong")
 }
 
 /** Fired when the server says the session is gone, so the app can sign the person out instead of showing "Unauthorized". */
+/** Fired after any write succeeds (or queued writes are replayed) so open screens can refresh quietly. */
+export const DATA_CHANGED_EVENT = "growthhub:data-changed";
+const announceChange = () => {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(DATA_CHANGED_EVENT));
+};
+
 export const UNAUTHORIZED_EVENT = "growthhub:unauthorized";
 
 /** A request that hasn't answered in this long is given up on (the offline cache or queue takes over where it can). */
@@ -304,7 +310,8 @@ async function write<T>(method: Method, url: string, payload?: unknown): Promise
 
   try {
     const data = await send<T>(method, url, payload, key);
-    void clearCache(); // server state changed; derived views (dashboard, analytics) are now stale
+    // server state changed; derived views (dashboard, analytics) are now stale
+    void clearCache().finally(announceChange);
     return data;
   } catch (err) {
     // Connection dropped mid-request: queue it. The same key makes replay safe if it did land.
@@ -365,7 +372,10 @@ export async function flushOutbox(): Promise<{ sent: number; dropped: number }> 
     flushing = false;
     notifyOutbox();
   }
-  if (result.sent || result.dropped) await clearCache();
+  if (result.sent || result.dropped) {
+    await clearCache();
+    announceChange();
+  }
   return result;
 }
 

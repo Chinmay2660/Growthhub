@@ -1,5 +1,6 @@
 "use client";
 
+import { useRevalidate } from "@/lib/use-revalidate";
 import { useCallback, useEffect, useState } from "react";
 import { Textarea } from "@/components/ui/Input";
 import clsx from "clsx";
@@ -245,6 +246,7 @@ export default function GroupMomentumPanel({ groupId }: { groupId: string }) {
   useEffect(() => {
     void load();
   }, [load]);
+  useRevalidate(() => void load());
 
   // Record what was sent so the buttons update immediately, without waiting for a reload.
   const markSent = (userId: string, kind: string) =>

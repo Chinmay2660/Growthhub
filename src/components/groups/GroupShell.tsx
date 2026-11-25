@@ -1,5 +1,6 @@
 "use client";
 
+import { useRevalidate } from "@/lib/use-revalidate";
 import {
   createContext,
   useCallback,
@@ -66,6 +67,7 @@ export default function GroupShell({
   useEffect(() => {
     load();
   }, [load]);
+  useRevalidate(() => void load({ silent: true }));
 
   if (loading && !group) return <GroupShellSkeleton />;
   if (error) return <ErrorState message={error} onRetry={load} />;

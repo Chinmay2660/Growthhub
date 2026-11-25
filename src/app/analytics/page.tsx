@@ -1,5 +1,6 @@
 "use client";
 
+import { useRevalidate, markQuiet, takeQuiet } from "@/lib/use-revalidate";
 import { useDocumentTitle } from "@/lib/use-document-title";
 import { useEffect, useState, useCallback } from "react";
 import dynamic from "next/dynamic";
@@ -34,7 +35,7 @@ export default function AnalyticsPage() {
       setLoading(false);
       return;
     }
-    setLoading(true);
+    if (!takeQuiet()) setLoading(true);
     try {
       const d = await apiGet<AnalyticsData>("/api/analytics", {
         onCached: (c) => {
@@ -52,6 +53,10 @@ export default function AnalyticsPage() {
   }, [activeGroupId]);
 
   useEffect(() => { load(); }, [load]);
+  useRevalidate(() => {
+    markQuiet();
+    void load();
+  });
 
   if (user && !user.activeGroupId) {
     return (
