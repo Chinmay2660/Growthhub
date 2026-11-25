@@ -5,7 +5,7 @@ export default function QuestionScopeChip({ scope }: { scope: ContentScope }) {
   return (
     <Chip
       variant={scope === "group" ? "brand" : "muted"}
-      className="!px-1.5 !py-0 !text-[10px] !font-semibold uppercase"
+      className="!px-1.5 !py-0 !text-xs !font-semibold uppercase"
     >
       {scope === "group" ? "Group" : "Personal"}
     </Chip>

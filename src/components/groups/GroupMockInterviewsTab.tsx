@@ -364,7 +364,7 @@ export default function GroupMockInterviewsTab({
                 <div className="flex min-w-0 flex-1 items-center gap-4">
                   <ProgressRing value={completionPct} size={88} />
                   <div className="min-w-0">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
                       {viewMode === "history" ? "Past round" : activeRound && activeRound._id === finishedRoundId ? "Round complete" : "Upcoming round"}
                     </p>
                     <p className="mt-0.5 text-lg font-bold text-[var(--foreground)] sm:text-xl">
@@ -425,7 +425,7 @@ export default function GroupMockInterviewsTab({
                 <table className="w-full min-w-[28rem] text-sm">
                   <caption className="sr-only">Team roster mock interview progress</caption>
                   <thead>
-                    <tr className="text-left text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                    <tr className="text-left text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
                       <th scope="col" className="px-3 py-2.5">Member</th>
                       <th scope="col" className="px-3 py-2.5">Done</th>
                       <th scope="col" className="px-3 py-2.5">Status</th>
@@ -486,7 +486,7 @@ export default function GroupMockInterviewsTab({
                             {member.questionsDone}
                           </td>
                           <td className="px-3 py-3">
-                            <Chip variant={STATUS_VARIANT[member.status]} className="!text-[10px]">
+                            <Chip variant={STATUS_VARIANT[member.status]} className="!text-xs">
                               {STATUS_LABEL[member.status]}
                             </Chip>
                           </td>
@@ -525,7 +525,7 @@ export default function GroupMockInterviewsTab({
                           {selected.name}
                           {selected.userId === currentUserId ? " (you)" : ""}
                         </p>
-                        <Chip variant="brand" className="!text-[10px]">
+                        <Chip variant="brand" className="!text-xs">
                           Viewing
                         </Chip>
                       </div>
@@ -587,7 +587,7 @@ export default function GroupMockInterviewsTab({
                               key={`${q.subjectId}-${q.questionId ?? q.question}`}
                               className="inset-panel p-3"
                             >
-                              <p className="text-[10px] font-semibold uppercase text-brand">
+                              <p className="text-xs font-semibold uppercase text-brand">
                                 {q.subjectName}
                               </p>
                               <p className="mt-1 text-sm font-medium leading-snug">{q.question}</p>
@@ -613,19 +613,19 @@ export default function GroupMockInterviewsTab({
                                   <span className="min-w-0">
                                     <span className="block truncate">{scorer?.name ?? "Member"}</span>
                                     {submitted?.rubric && (
-                                      <span className="block text-[10px] text-[var(--muted)]">
+                                      <span className="block text-xs text-[var(--muted)]">
                                         Comm {submitted.rubric.communication} · Correct{" "}
                                         {submitted.rubric.correctness} · Depth {submitted.rubric.depth} ·
                                         Conf {submitted.rubric.confidence}
                                       </span>
                                     )}
                                     {submitted?.weaknesses && submitted.weaknesses.length > 0 && (
-                                      <span className="block text-[10px] text-[var(--muted)]">
+                                      <span className="block text-xs text-[var(--muted)]">
                                         Work on: {submitted.weaknesses.join(", ")}
                                       </span>
                                     )}
                                     {submitted?.feedback && (
-                                      <span className="block text-[10px] text-[var(--muted)]">
+                                      <span className="block text-xs text-[var(--muted)]">
                                         “{submitted.feedback}”
                                       </span>
                                     )}

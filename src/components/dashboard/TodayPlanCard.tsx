@@ -88,7 +88,7 @@ function QuestionSection({
       <div>
         <div className="mb-2 flex items-center gap-2">
           <h3 className="text-sm font-semibold text-[var(--foreground)]">{title}</h3>
-          <Chip variant="muted" className="!px-2 !py-0.5 !text-[10px]">0</Chip>
+          <Chip variant="muted" className="!px-2 !py-0.5 !text-xs">0</Chip>
         </div>
         <p className="text-sm text-[var(--muted)]">{emptyMessage}</p>
       </div>
@@ -100,7 +100,7 @@ function QuestionSection({
       <div className="mb-3">
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-semibold text-[var(--foreground)]">{title}</h3>
-          <Chip variant="muted" className="!px-2 !py-0.5 !text-[10px]">{questions.length}</Chip>
+          <Chip variant="muted" className="!px-2 !py-0.5 !text-xs">{questions.length}</Chip>
         </div>
         <p className="mt-0.5 text-xs text-[var(--muted)]">{subtitle}</p>
       </div>

@@ -330,7 +330,7 @@ export default function SubjectsPage() {
                       {formatSubjectTrack(s)}
                     </h3>
                     {!s.isActive && (
-                      <Chip variant="muted" className="!px-2 !py-0.5 !text-[10px]">
+                      <Chip variant="muted" className="!px-2 !py-0.5 !text-xs">
                         Disabled
                       </Chip>
                     )}

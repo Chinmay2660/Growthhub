@@ -56,7 +56,7 @@ export default function BarColumns({
               title={`${item.label}${item.sub ? ` ${item.sub}` : ""}: ${item.value}${suffix ? ` ${suffix}` : ""}`}
             >
               {item.value > 0 && (
-                <span className="mb-1 text-[11px] font-semibold tabular-nums text-[var(--foreground)]">{item.value}</span>
+                <span className="mb-1 text-xs font-semibold tabular-nums text-[var(--foreground)]">{item.value}</span>
               )}
               <div
                 className={clsx(
@@ -72,10 +72,10 @@ export default function BarColumns({
       <div className="mt-2 flex gap-1.5 sm:gap-2.5">
         {items.map((item) => (
           <div key={item.key} className="min-w-0 flex-1 text-center leading-tight">
-            <p className={clsx("truncate text-[11px]", item.emphasis ? "font-semibold text-[var(--foreground)]" : "text-[var(--muted)]")}>
+            <p className={clsx("truncate text-xs", item.emphasis ? "font-semibold text-[var(--foreground)]" : "text-[var(--muted)]")}>
               {item.label}
             </p>
-            {item.sub && <p className="text-[10px] text-[var(--muted)]">{item.sub}</p>}
+            {item.sub && <p className="text-xs text-[var(--muted)]">{item.sub}</p>}
           </div>
         ))}
       </div>

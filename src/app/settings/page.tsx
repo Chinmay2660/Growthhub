@@ -109,7 +109,7 @@ function SettingsGroup({
 function StatPill({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2 text-center">
-      <p className="text-[10px] font-medium uppercase tracking-wide text-[var(--muted)]">
+      <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
         {label}
       </p>
       <p className="mt-0.5 text-sm font-semibold capitalize text-[var(--foreground)]">{value}</p>
@@ -348,7 +348,7 @@ export default function SettingsPage() {
               <p className="text-lg font-semibold text-[var(--foreground)]">{user.name}</p>
               <p className="text-sm text-[var(--muted)]">@{user.username}</p>
               {user.isGuest && (
-                <Chip variant="warning" className="mt-2 !px-2 !py-0.5 !text-[10px]">
+                <Chip variant="warning" className="mt-2 !px-2 !py-0.5 !text-xs">
                   Demo account
                 </Chip>
               )}
@@ -592,7 +592,7 @@ export default function SettingsPage() {
           aria-label="Daily study minutes"
           className="mt-4"
         />
-        <div className="mt-1 flex justify-between text-[10px] text-[var(--muted)]">
+        <div className="mt-1 flex justify-between text-xs text-[var(--muted)]">
           <span>30m</span>
           <span>8h</span>
         </div>

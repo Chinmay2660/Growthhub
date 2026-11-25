@@ -6,7 +6,7 @@
   --background: #f8f6f2;
   --foreground: #1c1917;
   --card: #ffffff;
-  --border: rgba(28, 25, 23, 0.06);
+  --border: rgba(28, 25, 23, 0.16);
   --muted: #6b645f;
   --accent: #a84d1f;
   --brand-rgb: 168 77 31;
@@ -75,7 +75,7 @@
   --background: #12100e;
   --foreground: #f5f0ea;
   --card: #1a1714;
-  --border: rgba(245, 240, 234, 0.06);
+  --border: rgba(245, 240, 234, 0.16);
   --muted: #a8a29e;
   --accent: #e07a4a;
 

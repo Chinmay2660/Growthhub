@@ -49,7 +49,7 @@ function Stat({ label, value, hint }: { label: string; value: React.ReactNode; h
     <div className="rounded-xl bg-[var(--surface-muted)] p-3.5">
       <p className="text-xs text-[var(--muted)]">{label}</p>
       <p className="mt-0.5 text-xl font-bold leading-tight">{value}</p>
-      {hint && <p className="mt-0.5 text-[11px] text-[var(--muted)]">{hint}</p>}
+      {hint && <p className="mt-0.5 text-xs text-[var(--muted)]">{hint}</p>}
     </div>
   );
 }
@@ -132,11 +132,11 @@ export default function UserProfilePage() {
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="truncate text-2xl font-bold text-[var(--foreground)]">{profile.name}</h1>
                 {profile.isSelf && (
-                  <span className="rounded-full bg-brand/15 px-2 py-0.5 text-[10px] font-semibold text-brand">You</span>
+                  <span className="rounded-full bg-brand/15 px-2 py-0.5 text-xs font-semibold text-brand">You</span>
                 )}
               </div>
               <p className="text-sm text-[var(--muted)]">@{profile.username}</p>
-              <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] font-medium">
+              <div className="mt-2 flex flex-wrap gap-1.5 text-xs font-medium">
                 <span className="rounded-full border border-[var(--border)] px-2 py-0.5 capitalize">
                   {profile.preparationLevel}
                 </span>

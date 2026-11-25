@@ -111,9 +111,9 @@ function MemberCard({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
             <p className="truncate text-sm font-semibold">{member.name}</p>
-            {member.isSelf && <span className="rounded-full bg-brand/15 px-1.5 py-0.5 text-[10px] font-semibold text-brand">You</span>}
+            {member.isSelf && <span className="rounded-full bg-brand/15 px-1.5 py-0.5 text-xs font-semibold text-brand">You</span>}
           </div>
-          <p className="text-[11px] text-[var(--muted)]">{formatGroupRoleLabel(member.role)}</p>
+          <p className="text-xs text-[var(--muted)]">{formatGroupRoleLabel(member.role)}</p>
           {member.online ? (
             <p className={clsx("mt-0.5 text-xs font-medium", style.text)}>Online now</p>
           ) : (
@@ -128,7 +128,7 @@ function MemberCard({
         <div className="flex shrink-0 flex-col items-end gap-1">
           {member.studyStreak > 0 && (
             <span
-              className="inline-flex items-center gap-1 rounded-full bg-orange-500/15 px-2 py-0.5 text-[11px] font-semibold text-orange-600"
+              className="inline-flex items-center gap-1 rounded-full bg-orange-500/15 px-2 py-0.5 text-xs font-semibold text-orange-600"
               title={`${member.studyStreak}-day streak`}
             >
               <Flame className="h-3 w-3" aria-hidden /> {member.studyStreak}
@@ -136,7 +136,7 @@ function MemberCard({
           )}
           <span
             className={clsx(
-              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold",
+              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold",
               member.goalMetToday ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" : "bg-[var(--surface-muted)] text-[var(--muted)]"
             )}
             title={member.goalMetToday ? "Daily goal reached" : "Questions solved today / daily goal"}
@@ -156,7 +156,7 @@ function MemberCard({
       </div>
 
       <div>
-        <div className="mb-1 flex items-baseline justify-between gap-2 text-[11px] text-[var(--muted)]">
+        <div className="mb-1 flex items-baseline justify-between gap-2 text-xs text-[var(--muted)]">
           <span>
             Questions done{" "}
             <span className="font-semibold text-[var(--foreground)]">
@@ -169,12 +169,12 @@ function MemberCard({
       </div>
 
       {member.behindReasons.length > 0 ? (
-        <p className="rounded-lg bg-amber-500/10 px-2.5 py-1.5 text-[11px] text-amber-700 dark:text-amber-300">
+        <p className="rounded-lg bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-700 dark:text-amber-300">
           {member.behindReasons.join(" · ")}
         </p>
       ) : (
         member.quiet && (
-          <p className="rounded-lg bg-brand/10 px-2.5 py-1.5 text-[11px] text-brand">
+          <p className="rounded-lg bg-brand/10 px-2.5 py-1.5 text-xs text-brand">
             Quiet for a few days. A cheer could help them get back to it.
           </p>
         )
@@ -216,7 +216,7 @@ function MemberCard({
               </Button>
             )}
             {member.cheersWeek > 0 && !isAdmin && (
-              <span className="ml-auto text-[11px] text-[var(--muted)]">{member.cheersWeek} 👏 this week</span>
+              <span className="ml-auto text-xs text-[var(--muted)]">{member.cheersWeek} 👏 this week</span>
             )}
           </>
         )}
@@ -318,7 +318,7 @@ export default function GroupMomentumPanel({ groupId }: { groupId: string }) {
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-brand/15 via-transparent to-transparent" />
         <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-brand">Group momentum</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-brand">Group momentum</p>
             <h2 className="mt-1 text-2xl font-bold leading-tight">{data.headline.title}</h2>
             <p className="mt-1 max-w-md text-sm text-[var(--muted)]">{data.headline.detail}</p>
             <div className="mt-3 flex flex-wrap gap-2 text-xs font-medium">
@@ -333,7 +333,7 @@ export default function GroupMomentumPanel({ groupId }: { groupId: string }) {
           <div className="flex shrink-0 items-center gap-4">
             <div className="text-center">
               <ProgressRing value={goalPct} size={92} />
-              <p className="mt-1 text-[11px] text-[var(--muted)]">
+              <p className="mt-1 text-xs text-[var(--muted)]">
                 Weekly goal · {team.doneWeek}/{team.goal}
                 <span className="block">{team.goalPerMember} per member</span>
               </p>
@@ -375,7 +375,7 @@ export default function GroupMomentumPanel({ groupId }: { groupId: string }) {
           <div className="mt-6 flex items-end gap-2 sm:gap-3" role="img" aria-label="Questions completed per day this week">
             {team.days.map((d) => (
               <div key={d.key} className="flex flex-1 flex-col items-center gap-1.5">
-                <span className="text-[11px] font-semibold">{d.questions || ""}</span>
+                <span className="text-xs font-semibold">{d.questions || ""}</span>
                 <div className="flex h-44 w-full items-end">
                   <div
                     className={clsx(
@@ -386,10 +386,10 @@ export default function GroupMomentumPanel({ groupId }: { groupId: string }) {
                     title={`${d.questions} question${d.questions === 1 ? "" : "s"}, ${d.activeMembers} teammate${d.activeMembers === 1 ? "" : "s"}`}
                   />
                 </div>
-                <span className={clsx("text-[11px]", d.isToday ? "font-semibold text-brand" : "text-[var(--muted)]")}>
+                <span className={clsx("text-xs", d.isToday ? "font-semibold text-brand" : "text-[var(--muted)]")}>
                   {weekday(d.key)}
                 </span>
-                <span className="text-[10px] text-[var(--muted)]">{d.activeMembers > 0 ? `${d.activeMembers} 👤` : "–"}</span>
+                <span className="text-xs text-[var(--muted)]">{d.activeMembers > 0 ? `${d.activeMembers} 👤` : "–"}</span>
               </div>
             ))}
           </div>
@@ -401,9 +401,9 @@ export default function GroupMomentumPanel({ groupId }: { groupId: string }) {
                     <Icon className="h-4 w-4" aria-hidden />
                   </span>
                   <div className="min-w-0">
-                    <p className="text-[10px] text-[var(--muted)]">{label}</p>
+                    <p className="text-xs text-[var(--muted)]">{label}</p>
                     <p className="truncate text-sm font-semibold">{h!.name}</p>
-                    <p className="text-[11px] text-[var(--muted)]">{unit(h!.value)}</p>
+                    <p className="text-xs text-[var(--muted)]">{unit(h!.value)}</p>
                   </div>
                 </li>
               ))}
@@ -477,7 +477,7 @@ export default function GroupMomentumPanel({ groupId }: { groupId: string }) {
               rows={3}
               className="mt-1 !text-sm"
             />
-            <span className="mt-0.5 block text-right text-[10px]">
+            <span className="mt-0.5 block text-right text-xs">
               {nudgeText.length}/{NOTE_MAX_LENGTH}
             </span>
           </label>

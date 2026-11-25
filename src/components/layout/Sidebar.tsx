@@ -70,7 +70,7 @@ export default function Sidebar() {
               {item.label}
               {item.id === "dashboard" && unread > 0 && (
                 <span
-                  className="ml-auto rounded-full bg-brand px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white"
+                  className="ml-auto rounded-full bg-brand px-1.5 py-0.5 text-xs font-semibold leading-none text-white"
                   aria-label={`${unread} unread note${unread === 1 ? "" : "s"}`}
                 >
                   {unread}

@@ -50,7 +50,7 @@ function isSolved(status: QuestionListItem["status"]): boolean {
 
 function OverdueTag({ days }: { days: number }) {
   return (
-    <span className="inline-flex items-center rounded-full bg-red-500/10 px-2 py-0.5 text-[10px] font-semibold text-red-700 dark:text-red-300">
+    <span className="inline-flex items-center rounded-full bg-red-500/10 px-2 py-0.5 text-xs font-semibold text-red-700 dark:text-red-300">
       Overdue {days}d
     </span>
   );
@@ -238,7 +238,7 @@ export default function QuestionListView({
             <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--muted)]">
               {showScope && q.scope && <QuestionScopeChip scope={q.scope} />}
               {showGroup && q.groupName && (
-                <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[10px] font-semibold text-brand">{q.groupName}</span>
+                <span className="rounded-full bg-brand/10 px-2 py-0.5 text-xs font-semibold text-brand">{q.groupName}</span>
               )}
               {q.overdueDays ? <OverdueTag days={q.overdueDays} /> : null}
               <span className={q.overdueDays ? "font-medium text-red-700 dark:text-red-300" : undefined}>{questionDateLabel(q)}</span>
@@ -370,7 +370,7 @@ export default function QuestionListView({
                 {showGroup && (
                   <td className="qs-row-cell px-3 py-3.5">
                     {q.groupName ? (
-                      <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-semibold text-brand">{q.groupName}</span>
+                      <span className="rounded-full bg-brand/10 px-2 py-0.5 text-xs font-semibold text-brand">{q.groupName}</span>
                     ) : (
                       "—"
                     )}

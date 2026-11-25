@@ -40,14 +40,14 @@ export default function TodayHero({ data, firstName }: { data: DashboardData; fi
         <div className="flex shrink-0 items-center gap-4">
           <div className="text-center">
             <ProgressRing value={pct} size={96} />
-            <p className="mt-1 text-[11px] text-[var(--muted)]" aria-live="polite">
+            <p className="mt-1 text-xs text-[var(--muted)]" aria-live="polite">
               {solvedToday}/{goal} today
             </p>
           </div>
         </div>
 
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-brand">Today</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-brand">Today</p>
           <h2 className="mt-1 text-xl font-bold leading-tight sm:text-2xl">
             {goalMet
               ? "Daily goal reached"

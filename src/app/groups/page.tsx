@@ -206,12 +206,12 @@ export default function GroupsPage() {
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1">
                     {isGroupAdmin && (
-                      <Chip variant="muted" className="!text-[10px]">
+                      <Chip variant="muted" className="!text-xs">
                         Admin
                       </Chip>
                     )}
                     {isActive && (
-                      <Chip variant="brand" className="!text-[10px]">
+                      <Chip variant="brand" className="!text-xs">
                         Active
                       </Chip>
                     )}

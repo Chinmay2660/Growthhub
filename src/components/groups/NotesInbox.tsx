@@ -121,7 +121,7 @@ export default function NotesInbox({
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium">{describe(n)}</p>
               {n.message && <p className="mt-0.5 text-sm text-[var(--muted)]">{n.message}</p>}
-              <p className="mt-1 text-[11px] text-[var(--muted)]">{timeAgo(n.createdAt, now)}</p>
+              <p className="mt-1 text-xs text-[var(--muted)]">{timeAgo(n.createdAt, now)}</p>
             </div>
             {!n.read && (
               <button

@@ -115,7 +115,7 @@ export default function MobileNav() {
           const active = !isExternalNavItem(item) && isNavItemActive(pathname, item.href);
           const Icon = item.icon;
           const className = clsx(
-            "flex flex-1 flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-[10px] font-medium transition-colors",
+            "flex flex-1 flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-xs font-medium transition-colors",
             active ? "bg-brand/10 text-brand" : "text-[var(--muted)]"
           );
 
@@ -168,7 +168,7 @@ export default function MobileNav() {
           type="button"
           onClick={() => setMoreOpen((open) => !open)}
           className={clsx(
-            "flex flex-1 flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-[10px] font-medium transition-colors",
+            "flex flex-1 flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-xs font-medium transition-colors",
             moreOpen || moreActive ? "text-brand" : "text-[var(--muted)]"
           )}
           aria-expanded={moreOpen}
