@@ -5,11 +5,13 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useId,
   useRef,
   useState,
 } from "react";
 import { createPortal } from "react-dom";
 import Button from "@/components/ui/Button";
+import { useDialog } from "@/components/ui/use-dialog";
 
 export type ConfirmOptions = {
   title?: string;
@@ -55,17 +57,12 @@ function ConfirmDialog({
     setMounted(true);
   }, []);
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose(false);
-    };
-    document.addEventListener("keydown", handler);
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", handler);
-      document.body.style.overflow = "";
-    };
-  }, [onClose]);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const uid = useId();
+  const titleId = `${uid}-title`;
+  const messageId = `${uid}-message`;
+
+  useDialog({ active: mounted, onClose: () => onClose(false), containerRef: dialogRef });
 
   if (!mounted) return null;
 
@@ -80,23 +77,25 @@ function ConfirmDialog({
         aria-hidden
       />
       <div
+        ref={dialogRef}
         role="alertdialog"
         aria-modal="true"
-        aria-labelledby="confirm-title"
-        aria-describedby="confirm-message"
-        className="relative z-10 w-full max-w-md animate-scale-in rounded-2xl bg-[var(--card)] p-6 shadow-panel"
+        aria-labelledby={titleId}
+        aria-describedby={messageId}
+        tabIndex={-1}
+        className="relative z-10 w-full max-w-md animate-scale-in rounded-2xl bg-[var(--card)] p-6 shadow-panel focus:outline-none"
       >
         <h3
-          id="confirm-title"
+          id={titleId}
           className="text-lg font-semibold text-[var(--foreground)]"
         >
           {title}
         </h3>
-        <p id="confirm-message" className="mt-2 text-sm text-[var(--muted)]">
+        <p id={messageId} className="mt-2 text-sm text-[var(--muted)]">
           {message}
         </p>
         <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <Button variant="outline" size="sm" onClick={() => onClose(false)}>
+          <Button variant="outline" size="sm" data-autofocus onClick={() => onClose(false)}>
             {cancelLabel}
           </Button>
           <Button

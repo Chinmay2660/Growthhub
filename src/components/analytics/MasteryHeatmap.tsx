@@ -15,11 +15,11 @@ export default function MasteryHeatmap({ subjects }: { subjects: SubjectMastery[
   return (
     <Card>
       <CardHeader
-        title="Mastery by subject"
+        title="Mastery by track"
         subtitle="Completed questions weighted by your confidence. Weakest first."
       />
       {subjects.length === 0 ? (
-        <p className="text-sm text-[var(--muted)]">Add questions to a subject to see mastery here.</p>
+        <p className="text-sm text-[var(--muted)]">Add questions to a track to see mastery here.</p>
       ) : (
         <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {subjects.map((s) => (

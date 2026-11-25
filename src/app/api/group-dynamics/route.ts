@@ -1,5 +1,5 @@
 import { withAuth } from "@/lib/api-handler";
-import { jsonOk, jsonError, istDateKey } from "@/lib/utils";
+import { jsonOk, jsonError, istDateKey, currentStreak, splitQuestionFields } from "@/lib/utils";
 import { isGroupMember } from "@/lib/services";
 import { canManageGroup } from "@/lib/group-roles";
 import { findBehind, type MemberActivity } from "@/lib/group-dynamics";
@@ -10,8 +10,10 @@ import {
   nextMilestone,
   type ActivityEvent,
   type MomentumResponse,
+  type FeedItem,
 } from "@/lib/group-momentum";
 import { NOTE_COOLDOWN_MS, WEEKLY_GOAL_PER_MEMBER } from "@/lib/group-notes";
+import { isObjectId } from "@/lib/access";
 import Group from "@/models/Group";
 import Subject from "@/models/Subject";
 import PracticeQuestion from "@/models/PracticeQuestion";
@@ -33,9 +35,9 @@ const ROLE_ORDER: Record<string, number> = { owner: 0, admin: 1, member: 2 };
  */
 export const GET = withAuth(async (request, { userId }) => {
   const groupId = new URL(request.url).searchParams.get("groupId");
-  if (!groupId) return jsonError("groupId is required");
+  if (!isObjectId(groupId)) return jsonError("groupId is required");
 
-  const group = await Group.findById(groupId).select("members").lean();
+  const group = await Group.findById(groupId).select("members weeklyGoalPerMember").lean();
   const role = group ? isGroupMember(group, userId) : null;
   if (!group || !role) return jsonError("Not a member of this group", 403);
 
@@ -43,10 +45,10 @@ export const GET = withAuth(async (request, { userId }) => {
   const since = new Date(now.getTime() - LOOKBACK_DAYS * DAY);
   const memberIds = group.members.map((m) => String(m.userId));
 
-  const [subjects, questions, users, sessions, notesWeek, sentByMe, unreadNotes] = await Promise.all([
+  const [subjects, allQuestions, users, sessions, notesWeek, sentByMe, unreadNotes] = await Promise.all([
     Subject.find({ groupId, scope: "group", isActive: true }).select("_id name").lean(),
     PracticeQuestion.find({ groupId, scope: "group" }).select("_id subjectId").lean(),
-    User.find({ _id: { $in: memberIds } }).select("_id name studyStreak lastSeenAt").lean(),
+    User.find({ _id: { $in: memberIds } }).select("_id name studyStreak lastStudyDate lastSeenAt dailyQuestionGoal").lean(),
     StudySession.find({ groupId, userId: { $in: memberIds }, completedAt: { $gte: since } })
       .select("userId completedAt durationMinutes")
       .lean(),
@@ -59,21 +61,27 @@ export const GET = withAuth(async (request, { userId }) => {
     GroupNote.countDocuments({ groupId, toUserId: userId, readAt: { $exists: false } }),
   ]);
 
+  // Same rule as the leaderboard: questions in archived tracks don't count.
+  const activeSubjectIds = new Set(subjects.map((s) => String(s._id)));
+  const questions = allQuestions.filter((q) => activeSubjectIds.has(String(q.subjectId)));
+
   const progress = await QuestionProgress.find({
     userId: { $in: memberIds },
     questionId: { $in: questions.map((q) => q._id) },
     status: { $in: ["done", "revised"] },
   })
-    .select("userId questionId lastPracticed updatedAt")
+    .select("userId questionId firstCompletedAt lastPracticed updatedAt")
     .lean();
 
   const events: ActivityEvent[] = [];
   const heatByMember = new Map<string, Record<string, number>>();
   const teamHeat: Record<string, number> = {};
   const lastSolved = new Map<string, number>();
+  const recent: { userId: string; questionId: string; at: Date }[] = [];
   for (const p of progress) {
-    const at = new Date(p.lastPracticed ?? p.updatedAt);
+    const at = new Date(p.firstCompletedAt ?? p.lastPracticed ?? p.updatedAt);
     if (at >= since) {
+      recent.push({ userId: String(p.userId), questionId: String(p.questionId), at });
       const uid = String(p.userId);
       events.push({ userId: uid, at, kind: "question" });
       lastSolved.set(uid, Math.max(lastSolved.get(uid) ?? 0, at.getTime()));
@@ -106,7 +114,7 @@ export const GET = withAuth(async (request, { userId }) => {
   }
 
   const names = new Map(users.map((u) => [String(u._id), u.name]));
-  const streaks = new Map(users.map((u) => [String(u._id), u.studyStreak ?? 0]));
+  const streaks = new Map(users.map((u) => [String(u._id), currentStreak(u.studyStreak, u.lastStudyDate)]));
   const lastSeen = new Map(users.map((u) => [String(u._id), u.lastSeenAt ? new Date(u.lastSeenAt).getTime() : 0]));
 
   const onlineNow = (id: string) => id === userId || now.getTime() - (lastSeen.get(id) ?? 0) <= ONLINE_WINDOW_MS;
@@ -136,6 +144,10 @@ export const GET = withAuth(async (request, { userId }) => {
   const sent = new Map<string, string[]>();
   for (const n of sentByMe) sent.set(String(n.toUserId), [...(sent.get(String(n.toUserId)) ?? []), n.kind]);
 
+  const todayKey = istDateKey(now);
+  const solvedToday = (id: string) => heatByMember.get(id)?.[todayKey] ?? 0;
+  const dailyGoals = new Map(users.map((u) => [String(u._id), u.dailyQuestionGoal ?? 3]));
+
   const members: MomentumResponse["members"] = memberIds
     .map((id) => {
       const m = momentum.members[id];
@@ -161,6 +173,10 @@ export const GET = withAuth(async (request, { userId }) => {
         cheersWeek: cheers.get(id) ?? 0,
         sentToday: sent.get(id) ?? [],
         behindReasons: behind.get(id) ?? [],
+        solvedToday: solvedToday(id),
+        dailyGoal: dailyGoals.get(id) ?? 3,
+        goalMetToday: solvedToday(id) >= (dailyGoals.get(id) ?? 3),
+        quiet: id !== userId && (m.daysSinceActive === null || m.daysSinceActive >= 3),
       };
     })
     .sort(
@@ -168,7 +184,21 @@ export const GET = withAuth(async (request, { userId }) => {
         (ROLE_ORDER[a.role] ?? 2) - (ROLE_ORDER[b.role] ?? 2) || a.name.localeCompare(b.name)
     );
 
-  const goal = memberIds.length * WEEKLY_GOAL_PER_MEMBER;
+  // ---- recent activity feed (newest first), with each question's title
+  const feedRows = recent.sort((a, b) => b.at.getTime() - a.at.getTime()).slice(0, 12);
+  const feedQuestions = feedRows.length
+    ? await PracticeQuestion.find({ _id: { $in: feedRows.map((r) => r.questionId) } }).select("_id content").lean()
+    : [];
+  const titleOf = new Map(feedQuestions.map((q) => [String(q._id), splitQuestionFields(q.content).title]));
+  const feed: FeedItem[] = feedRows.map((r) => ({
+    userId: r.userId,
+    name: names.get(r.userId) ?? "Member",
+    at: r.at.toISOString(),
+    title: titleOf.get(r.questionId) ?? "a question",
+  }));
+
+  const goalPerMember = group.weeklyGoalPerMember ?? WEEKLY_GOAL_PER_MEMBER;
+  const goal = memberIds.length * goalPerMember;
   const goalPct = goal ? Math.round((momentum.doneWeek / goal) * 100) : 0;
   const nameOf = (id: string) => names.get(id) ?? "Member";
   const highlight = (h: { userId: string; value: number } | null) => (h ? { ...h, name: nameOf(h.userId) } : null);
@@ -184,8 +214,10 @@ export const GET = withAuth(async (request, { userId }) => {
       memberCount: memberIds.length,
       goalPct,
     }),
+    feed,
     team: {
       memberCount: memberIds.length,
+      goalPerMember,
       activeMembers: momentum.activeMembers,
       doneWeek: momentum.doneWeek,
       goal,

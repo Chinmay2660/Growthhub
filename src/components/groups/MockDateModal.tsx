@@ -4,11 +4,12 @@ import clsx from "clsx";
 import { useState } from "react";
 import { CalendarClock } from "lucide-react";
 import Modal from "@/components/ui/Modal";
+import Select from "@/components/ui/Select";
+import DatePicker from "@/components/ui/DatePicker";
 import Button from "@/components/ui/Button";
+import FormField from "@/components/ui/FormField";
+import ModalFooter from "@/components/ui/ModalFooter";
 import { APP_TIMEZONE, parseAppDateTime, toDateTimeLocalValue } from "@/lib/utils";
-
-const field =
-  "w-full rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2 text-sm text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-brand/40";
 
 function fmtTime(hhmm: string) {
   const [h, m] = hhmm.split(":").map(Number);
@@ -30,6 +31,7 @@ export default function MockDateModal({
   onChange,
   onSave,
   saving,
+  title = "Schedule group mock",
 }: {
   open: boolean;
   onClose: () => void;
@@ -37,6 +39,7 @@ export default function MockDateModal({
   onChange: (next: string) => void;
   onSave: () => void;
   saving: boolean;
+  title?: string;
 }) {
   const [now] = useState(() => Date.now());
   const [datePart = "", timePart = ""] = value.split("T");
@@ -47,6 +50,7 @@ export default function MockDateModal({
 
   const complete = datePart !== "" && timePart !== "";
   const parsed = complete ? parseAppDateTime(value) : null;
+  const inPast = parsed ? parsed.getTime() < now : false;
   const preview = parsed
     ? {
         day: parsed.toLocaleDateString("en-IN", {
@@ -68,12 +72,12 @@ export default function MockDateModal({
     : null;
 
   return (
-    <Modal open={open} onClose={onClose} title="Schedule group mock" size="sm">
+    <Modal open={open} onClose={onClose} title={title} size="sm">
       <form
         className="space-y-5"
         onSubmit={(e) => {
           e.preventDefault();
-          if (complete) onSave();
+          if (complete && !inPast) onSave();
         }}
       >
         <div
@@ -92,6 +96,7 @@ export default function MockDateModal({
               <p className="text-xs text-[var(--muted)]">
                 {preview.time} IST · {preview.rel}
               </p>
+              {inPast && <p className="mt-0.5 text-xs text-[var(--danger)]">Choose a time in the future.</p>}
             </div>
           ) : (
             <p className="text-sm text-[var(--muted)]">Pick a date and time</p>
@@ -100,45 +105,26 @@ export default function MockDateModal({
 
         <div className="space-y-2">
           <div className="grid grid-cols-2 gap-3">
-            <label className="block text-xs font-medium text-[var(--muted)]">
-              Date
-              <input
-                type="date"
-                value={datePart}
-                onChange={(e) => setDate(e.target.value)}
-                className={clsx(field, "mt-1")}
-                required
-              />
-            </label>
-            <label className="block text-xs font-medium text-[var(--muted)]">
-              Time (IST)
-              <select
+            <FormField label="Date">
+              <DatePicker value={datePart} onChange={setDate} className="text-sm font-normal" />
+            </FormField>
+            <FormField label="Time (IST)">
+              <Select
                 value={timePart}
-                onChange={(e) => setTime(e.target.value)}
-                className={clsx(field, "mt-1")}
-                required
-              >
-                <option value="" disabled>
-                  Select
-                </option>
-                {timeOptions.map((t) => (
-                  <option key={t} value={t}>
-                    {fmtTime(t)}
-                  </option>
-                ))}
-              </select>
-            </label>
+                onChange={setTime}
+                placeholder="Select"
+                className="text-sm font-normal"
+                options={timeOptions.map((tm) => ({ value: tm, label: fmtTime(tm) }))}
+              />
+            </FormField>
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 border-t border-[var(--border)] pt-4">
-          <Button type="button" variant="ghost" size="sm" onClick={onClose} disabled={saving}>
-            Cancel
-          </Button>
-          <Button type="submit" size="sm" loading={saving} disabled={!complete}>
+        <ModalFooter className="!mt-5" onCancel={onClose} cancelDisabled={saving}>
+          <Button type="submit" loading={saving} disabled={!complete || inPast}>
             {saving ? "Saving…" : "Save date"}
           </Button>
-        </div>
+        </ModalFooter>
       </form>
     </Modal>
   );

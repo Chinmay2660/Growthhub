@@ -154,9 +154,7 @@ export default function TodayPlanCard({
             : `${groupCount} group · ${personalCount} personal`
         }
         action={
-          <Link href="/questions">
-            <Button variant="outline" size="sm">View All</Button>
-          </Link>
+          <Button href="/questions" variant="outline" size="sm">View All</Button>
         }
       />
       {total === 0 ? (

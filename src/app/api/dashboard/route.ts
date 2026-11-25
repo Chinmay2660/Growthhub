@@ -1,161 +1,174 @@
 import { connectToDatabase } from "@/lib/mongodb";
 import { requireAuthUserId, unauthorized } from "@/lib/api-auth";
-import { jsonOk, jsonError, toDateInputValue } from "@/lib/utils";
 import {
-  buildGroupDoneQuestionStats,
-  countQuestionsOnDay,
-  toQuestionsByDate,
-} from "@/lib/question-stats";
-import {
-  serializeDoc,
-  getGroupInsights,
-  getTodayQuestionsForUser,
-} from "@/lib/services";
+  jsonOk,
+  jsonError,
+  currentStreak,
+  startOfDay,
+  addIstDays,
+  splitQuestionFields,
+} from "@/lib/utils";
+import { getTodayQuestionsForUser } from "@/lib/services";
 import { getInterviewCountdown } from "@/lib/readiness";
 import User from "@/models/User";
 import Group from "@/models/Group";
 import Subject from "@/models/Subject";
+import MockInterviewRound from "@/models/MockInterviewRound";
 import PracticeQuestion from "@/models/PracticeQuestion";
 import QuestionProgress from "@/models/QuestionProgress";
-import PrepTask from "@/models/PrepTask";
 import { NATIVE_PERSONAL_QUESTION_FILTER } from "@/lib/practice-question-filters";
 import type { DashboardData } from "@/types";
 
+/**
+ * The dashboard covers every group the person belongs to at once (there is no single "current" group
+ * to pick): today's and overdue questions, the group strips, the nearest interview date and the next mock.
+ */
 export async function GET(request: Request) {
   try {
     const userId = requireAuthUserId(request);
     await connectToDatabase();
 
     const user = await User.findById(userId)
-      .select("activeGroupId studyStreak lastStudyDate")
+      .select("studyStreak lastStudyDate dailyQuestionGoal")
       .lean();
     if (!user) return jsonError("User not found", 404);
-    if (!user.activeGroupId) return jsonError("No active group", 400);
 
-    const groupId = String(user.activeGroupId);
-    const group = await Group.findById(groupId).lean();
-    if (!group) {
-      await User.findByIdAndUpdate(userId, { $unset: { activeGroupId: 1 } });
-      return jsonError("No active group", 400);
-    }
+    const groups = await Group.find({ "members.userId": userId })
+      .select("_id name members interviewDate createdAt")
+      .sort({ createdAt: -1 })
+      .lean();
+    if (groups.length === 0) return jsonError("No active group", 400);
 
-    const countdown = getInterviewCountdown(group.interviewDate);
-    const memberIds = (group.members ?? []).map((m) => String(m.userId));
+    const groupIds = groups.map((g) => String(g._id));
+    const now = new Date();
+    const todayStart = startOfDay(now);
+    const tomorrowStart = addIstDays(now, 1);
+    const dailyGoal = user.dailyQuestionGoal ?? 3;
 
-    const [
-      { memberStats },
-      todayQuestions,
-      subjects,
-      groupQuestions,
-      personalQuestions,
-      pendingTasks,
-    ] = await Promise.all([
-      getGroupInsights(groupId, memberIds),
-      getTodayQuestionsForUser(userId, groupId),
+    // ---- the interview that matters most: the nearest one still ahead, else the most recent that passed
+    const dated = groups.filter((g) => g.interviewDate);
+    const upcoming = dated
+      .filter((g) => new Date(g.interviewDate as Date).getTime() > now.getTime())
+      .sort((a, b) => new Date(a.interviewDate as Date).getTime() - new Date(b.interviewDate as Date).getTime())[0];
+    const interviewGroup =
+      upcoming ??
+      [...dated].sort((a, b) => new Date(b.interviewDate as Date).getTime() - new Date(a.interviewDate as Date).getTime())[0];
+    const countdown = getInterviewCountdown(interviewGroup?.interviewDate);
+
+    const [todayQuestions, subjects, groupQuestions, personalQuestions] = await Promise.all([
+      getTodayQuestionsForUser(userId, groupIds),
       Subject.find({
         $or: [
-          { groupId, scope: "group", isActive: true },
+          { groupId: { $in: groupIds }, scope: "group", isActive: true },
           { userId, scope: "personal", isActive: true },
         ],
-      }).lean(),
-      PracticeQuestion.find({ groupId, scope: "group" })
-        .select("_id subjectId practiceDate createdAt")
-        .lean(),
-      PracticeQuestion.find({
-        userId,
-        groupId,
-        scope: "personal",
-        ...NATIVE_PERSONAL_QUESTION_FILTER,
       })
-        .select("subjectId practiceDate createdAt")
+        .select("_id name")
         .lean(),
-      PrepTask.find({
-        userId,
-        groupId,
-        status: { $ne: "completed" },
-        dueDate: { $exists: true },
-      })
-        .sort({ dueDate: 1 })
-        .limit(5)
+      PracticeQuestion.find({ groupId: { $in: groupIds }, scope: "group" })
+        .select("_id subjectId practiceDate")
+        .lean(),
+      PracticeQuestion.find({ userId, scope: "personal", ...NATIVE_PERSONAL_QUESTION_FILTER })
+        .select("_id subjectId practiceDate status")
         .lean(),
     ]);
 
-    const questionProgress =
-      groupQuestions.length > 0 && memberIds.length > 0
-        ? await QuestionProgress.find({
-            userId: { $in: memberIds },
-            questionId: { $in: groupQuestions.map((q) => q._id) },
-            // Only completed rows count toward the group stats ("revised" counts as done), so skip the rest.
-            status: { $in: ["done", "revised"] },
-          })
-            .select("userId questionId status")
-            .lean()
-        : [];
-
     const activeSubjectIds = new Set(subjects.map((s) => String(s._id)));
-    const visibleGroupQuestions = groupQuestions.filter((q) =>
-      activeSubjectIds.has(String(q.subjectId))
-    );
-    const visiblePersonalQuestions = personalQuestions.filter((q) =>
-      activeSubjectIds.has(String(q.subjectId))
-    );
+    const visibleGroupQuestions = groupQuestions.filter((q) => activeSubjectIds.has(String(q.subjectId)));
+    const visiblePersonalQuestions = personalQuestions.filter((q) => activeSubjectIds.has(String(q.subjectId)));
 
-    const todayStr = toDateInputValue(new Date());
-    const questionsToday =
-      countQuestionsOnDay(visibleGroupQuestions, todayStr) +
-      countQuestionsOnDay(visiblePersonalQuestions, todayStr);
-    const groupQuestionStats = buildGroupDoneQuestionStats(
-      visibleGroupQuestions,
-      memberIds,
-      questionProgress
-    );
-    const groupSubjects = subjects.filter((s) => s.scope === "group");
-    const subjectStats = groupSubjects.map((s) => {
-      const qStats = groupQuestionStats.get(String(s._id));
-      const questionCount = qStats?.count ?? 0;
-      const totalQuestions = s.totalQuestions ?? 0;
-      const completionPercent =
-        totalQuestions > 0
-          ? Math.min(100, Math.round((questionCount / totalQuestions) * 100))
-          : 0;
-      return {
-        ...serializeDoc(s),
-        totalQuestions,
-        topicCount: 0,
-        completedTopics: 0,
-        completionPercent,
-        confidence:
-          completionPercent < 40
-            ? ("weak" as const)
-            : completionPercent < 75
-              ? ("okay" as const)
-              : ("strong" as const),
-        studyMinutes: 0,
-        questionCount,
-        questionsByDate: qStats ? toQuestionsByDate(qStats.byDate) : [],
-      };
-    });
+    // ---- what is overdue: scheduled before today and not solved by me yet
+    const mySolved = visibleGroupQuestions.length
+      ? new Set(
+          (
+            await QuestionProgress.find({
+              userId,
+              questionId: { $in: visibleGroupQuestions.map((q) => q._id) },
+              status: { $in: ["done", "revised"] },
+            })
+              .select("questionId")
+              .lean()
+          ).map((p) => String(p.questionId))
+        )
+      : new Set<string>();
 
-    const weakSubjects = subjectStats
-      .filter((s) => s.totalQuestions > 0 && s.completionPercent < 60)
-      .sort((a, b) => a.completionPercent - b.completionPercent)
-      .slice(0, 3);
+    const overdueCandidates = [
+      ...visibleGroupQuestions
+        .filter((q) => q.practiceDate && q.practiceDate < todayStart && !mySolved.has(String(q._id)))
+        .map((q) => ({ id: String(q._id), at: q.practiceDate as Date })),
+      ...visiblePersonalQuestions
+        .filter(
+          (q) => q.practiceDate && q.practiceDate < todayStart && q.status !== "done" && q.status !== "revised"
+        )
+        .map((q) => ({ id: String(q._id), at: q.practiceDate as Date })),
+    ].sort((a, b) => a.at.getTime() - b.at.getTime());
+
+    // ---- what changed while away
+    const lastActive = user.lastStudyDate ? new Date(user.lastStudyDate) : null;
+    const daysAway = lastActive
+      ? Math.round((todayStart.getTime() - startOfDay(lastActive).getTime()) / 86_400_000)
+      : 0;
+    const otherMemberIds = Array.from(
+      new Set(groups.flatMap((g) => (g.members ?? []).map((m) => String(m.userId))))
+    ).filter((id) => id !== userId);
+
+    const [solvedToday, overdueRows, teamSolved, nextRound] = await Promise.all([
+      QuestionProgress.countDocuments({
+        userId,
+        firstCompletedAt: { $gte: todayStart, $lt: tomorrowStart },
+      }),
+      overdueCandidates.length
+        ? PracticeQuestion.find({ _id: { $in: overdueCandidates.slice(0, 5).map((c) => c.id) } })
+            .select("_id content subjectId practiceDate scope")
+            .lean()
+        : Promise.resolve([]),
+      daysAway >= 3 && lastActive && otherMemberIds.length && groupQuestions.length
+        ? QuestionProgress.countDocuments({
+            userId: { $in: otherMemberIds },
+            questionId: { $in: groupQuestions.map((q) => q._id) },
+            status: { $in: ["done", "revised"] },
+            firstCompletedAt: { $gt: lastActive },
+          })
+        : Promise.resolve(0),
+      MockInterviewRound.findOne({ groupId: { $in: groupIds }, interviewDate: { $gte: now } })
+        .sort({ interviewDate: 1 })
+        .select("groupId roundNumber interviewDate")
+        .lean(),
+    ]);
+
+    const subjectNameById = new Map(subjects.map((s) => [String(s._id), s.name as string]));
+    const overdueOrder = new Map(overdueCandidates.map((c, i) => [c.id, i]));
+    const overdueItems = overdueRows
+      .map((q) => ({
+        _id: String(q._id),
+        title: splitQuestionFields(q.content).title,
+        subjectName: subjectNameById.get(String(q.subjectId)) ?? "",
+        practiceDate: (q.practiceDate as Date).toISOString(),
+        scope: q.scope as "group" | "personal",
+      }))
+      .sort((a, b) => (overdueOrder.get(a._id) ?? 0) - (overdueOrder.get(b._id) ?? 0));
+
+    const nextMockGroup = nextRound ? groups.find((g) => String(g._id) === String(nextRound.groupId)) : undefined;
 
     const data: DashboardData = {
       countdown: {
         ...countdown,
-        interviewDate: group.interviewDate?.toISOString() ?? null,
+        interviewDate: interviewGroup?.interviewDate?.toISOString() ?? null,
       },
       todayQuestions,
-      weakSubjects: weakSubjects as unknown as DashboardData["weakSubjects"],
-      memberStats,
-      upcomingDeadlines: pendingTasks.map((t) => ({
-        label: t.title,
-        date: t.dueDate!.toISOString(),
-        priority: t.priority,
-      })),
-      studyStreak: user.studyStreak ?? 0,
-      questionsToday,
+      studyStreak: currentStreak(user.studyStreak, user.lastStudyDate),
+      daily: { goal: dailyGoal, solvedToday },
+      away: daysAway >= 3 ? { days: daysAway, overdue: overdueCandidates.length, teamSolved } : null,
+      overdue: { count: overdueCandidates.length, items: overdueItems },
+      groups: groups.map((g) => ({ _id: String(g._id), name: g.name })),
+      nextMock: nextRound?.interviewDate
+        ? {
+            roundNumber: nextRound.roundNumber,
+            date: new Date(nextRound.interviewDate).toISOString(),
+            groupId: String(nextRound.groupId),
+            groupName: nextMockGroup?.name ?? "",
+          }
+        : null,
     };
 
     return jsonOk(data);

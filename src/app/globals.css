@@ -7,24 +7,24 @@
   --foreground: #1c1917;
   --card: #ffffff;
   --border: rgba(28, 25, 23, 0.06);
-  --muted: #78716c;
-  --accent: #c45c26;
+  --muted: #6b645f;
+  --accent: #a84d1f;
 
   --surface: #f5f2ed;
   --surface-muted: rgba(28, 25, 23, 0.04);
   --input-bg: #ffffff;
   --input-border: rgba(28, 25, 23, 0.1);
   --overlay: rgba(28, 25, 23, 0.45);
-  --ring: rgba(196, 92, 38, 0.35);
+  --ring: rgba(168, 77, 31, 0.35);
 
   --success: #3d6b59;
-  --warning: #9a6b1f;
+  --warning: #8a5e18;
   --danger: #b33c32;
 
   --chip-bg: rgba(28, 25, 23, 0.05);
   --chip-bg-hover: rgba(28, 25, 23, 0.09);
   --chip-bg-active: #f0e4da;
-  --chip-text: #78716c;
+  --chip-text: #6b645f;
   --chip-text-active: #a84d1f;
   --chip-border: rgba(28, 25, 23, 0.06);
   --chip-brand-bg: rgba(196, 92, 38, 0.12);
@@ -32,13 +32,13 @@
   --chip-success-bg: rgba(61, 107, 89, 0.14);
   --chip-success-text: #3d6b59;
   --chip-warning-bg: rgba(180, 120, 40, 0.14);
-  --chip-warning-text: #9a6b1f;
+  --chip-warning-text: #8a5e18;
   --chip-danger-bg: rgba(185, 60, 50, 0.12);
   --chip-danger-text: #b33c32;
   --chip-info-bg: rgba(196, 92, 38, 0.08);
-  --chip-info-text: #8b6f5c;
+  --chip-info-text: #735a49;
   --chip-muted-bg: rgba(120, 113, 108, 0.1);
-  --chip-muted-text: #78716c;
+  --chip-muted-text: #6b645f;
 
   --scrollbar-size: 6px;
   --scrollbar-track: transparent;
@@ -48,9 +48,6 @@
   --qs-not_started-bg: rgba(239, 68, 68, 0.12);
   --qs-not_started-text: #b91c1c;
   --qs-not_started-border: rgba(220, 38, 38, 0.75);
-  --qs-add_to_todo-bg: rgba(139, 92, 246, 0.16);
-  --qs-add_to_todo-text: #6d28d9;
-  --qs-add_to_todo-border: rgba(124, 58, 237, 0.7);
   --qs-in_progress-bg: rgba(234, 179, 8, 0.18);
   --qs-in_progress-text: #a16207;
   --qs-in_progress-border: rgba(202, 138, 4, 0.75);
@@ -63,8 +60,6 @@
 
   --qs-not_started-row: rgba(239, 68, 68, 0.14);
   --qs-not_started-row-hover: rgba(239, 68, 68, 0.22);
-  --qs-add_to_todo-row: rgba(139, 92, 246, 0.14);
-  --qs-add_to_todo-row-hover: rgba(139, 92, 246, 0.22);
   --qs-in_progress-row: rgba(234, 179, 8, 0.16);
   --qs-in_progress-row-hover: rgba(234, 179, 8, 0.24);
   --qs-revised-row: rgba(59, 130, 246, 0.14);
@@ -117,9 +112,6 @@
   --qs-not_started-bg: rgba(239, 68, 68, 0.22);
   --qs-not_started-text: #fecaca;
   --qs-not_started-border: rgba(248, 113, 113, 0.85);
-  --qs-add_to_todo-bg: rgba(139, 92, 246, 0.28);
-  --qs-add_to_todo-text: #ddd6fe;
-  --qs-add_to_todo-border: rgba(167, 139, 250, 0.8);
   --qs-in_progress-bg: rgba(234, 179, 8, 0.28);
   --qs-in_progress-text: #fde68a;
   --qs-in_progress-border: rgba(250, 204, 21, 0.85);
@@ -132,14 +124,56 @@
 
   --qs-not_started-row: rgba(239, 68, 68, 0.2);
   --qs-not_started-row-hover: rgba(239, 68, 68, 0.3);
-  --qs-add_to_todo-row: rgba(139, 92, 246, 0.2);
-  --qs-add_to_todo-row-hover: rgba(139, 92, 246, 0.3);
   --qs-in_progress-row: rgba(234, 179, 8, 0.22);
   --qs-in_progress-row-hover: rgba(234, 179, 8, 0.32);
   --qs-revised-row: rgba(59, 130, 246, 0.2);
   --qs-revised-row-hover: rgba(59, 130, 246, 0.3);
   --qs-done-row: rgba(34, 197, 94, 0.2);
   --qs-done-row-hover: rgba(34, 197, 94, 0.3);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* Visible keyboard focus for anything without its own focus style. */
+a:focus-visible,
+button:focus-visible,
+summary:focus-visible,
+[role="button"]:focus-visible,
+[role="tab"]:focus-visible,
+[role="radio"]:focus-visible,
+[role="checkbox"]:focus-visible,
+[role="slider"]:focus-visible,
+[role="option"]:focus-visible,
+[role="combobox"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Brand-coloured text on dark surfaces uses the lighter accent for AA contrast. */
+.dark .text-brand,
+.dark .hover\:text-brand:hover {
+  color: var(--accent);
+}
+
+.skip-link {
+  position: fixed;
+  left: 0.75rem;
+  top: 0.75rem;
+  z-index: 400;
+  transform: translateY(-200%);
+  border-radius: 0.5rem;
+  background: var(--card);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--foreground);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2), 0 8px 24px -8px rgba(0, 0, 0, 0.3);
+}
+
+.skip-link:focus {
+  transform: none;
 }
 
 body {
@@ -258,7 +292,7 @@ body {
 
   .input::placeholder {
     color: var(--muted);
-    opacity: 0.7;
+    opacity: 1;
   }
 
   .input:focus {
@@ -333,6 +367,11 @@ body {
     box-shadow: 0 1px 2px color-mix(in srgb, var(--accent) 35%, transparent);
   }
 
+  /* White on the lighter dark-theme accent is only ~3:1, so use dark text on the filled toggle. */
+  .dark .chip-brand.chip-toggle.chip-active {
+    color: #1a1714 !important;
+  }
+
   .chip-success {
     background: var(--chip-success-bg);
     color: var(--chip-success-text);
@@ -390,11 +429,6 @@ body {
     border-color: var(--qs-not_started-border);
   }
 
-  .qs-add_to_todo {
-    background-color: var(--qs-add_to_todo-bg);
-    color: var(--qs-add_to_todo-text);
-    border-color: var(--qs-add_to_todo-border);
-  }
 
   .qs-in_progress {
     background-color: var(--qs-in_progress-bg);
@@ -585,3 +619,35 @@ html.dark input[type="time"]::-webkit-calendar-picker-indicator {
 .tok-literal { color: var(--tok-literal); }
 .tok-function { color: var(--tok-function); }
 .tok-type { color: var(--tok-type); }
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* Loading spinners keep turning, slowly, so progress is still visible. */
+  .animate-spin {
+    animation-duration: 2s !important;
+    animation-iteration-count: infinite !important;
+  }
+
+  /* Skeleton pulse becomes a static tint. */
+  .animate-pulse {
+    animation: none !important;
+    opacity: 0.7;
+  }
+
+  .question-points-burst {
+    animation: none !important;
+    opacity: 0;
+  }
+}

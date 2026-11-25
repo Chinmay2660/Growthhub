@@ -11,28 +11,9 @@ export function Skeleton({ className }: { className?: string }) {
   );
 }
 
-export function TaskListSkeleton({ rows = 4 }: { rows?: number }) {
-  return (
-    <div className="space-y-2">
-      {Array.from({ length: rows }, (_, i) => (
-        <div key={i} className="rounded-xl border border-[var(--border)] p-4">
-          <div className="flex items-start gap-3">
-            <Skeleton className="mt-1 h-4 w-4 shrink-0 rounded" />
-            <div className="flex-1 space-y-2">
-              <Skeleton className="h-4 w-3/5" />
-              <Skeleton className="h-3 w-2/5" />
-            </div>
-            <Skeleton className="h-3 w-12" />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 export function QuestionListSkeleton({ rows = 6 }: { rows?: number }) {
   return (
-    <div className="hidden overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] lg:block">
+    <div className="hidden overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] lg:block">
       <div className="space-y-1 p-2">
         {Array.from({ length: rows }, (_, i) => (
           <div key={i} className="flex items-center gap-4 rounded-xl px-4 py-3.5">
@@ -77,7 +58,7 @@ export function QuestionRowsSkeleton({ rows = 5 }: { rows?: number }) {
       </div>
       <div className="space-y-3 lg:hidden">
         {Array.from({ length: Math.min(rows, 3) }, (_, i) => (
-          <div key={i} className="space-y-3 rounded-2xl border border-[var(--border)] p-4">
+          <div key={i} className="space-y-3 rounded-xl border border-[var(--border)] p-4">
             <div className="flex items-start justify-between gap-3">
               <Skeleton className="h-4 w-3/5" />
               <Skeleton className="h-7 w-24 rounded-full" />
@@ -109,11 +90,11 @@ export function DashboardSkeleton() {
   return (
     <div className="space-y-6" aria-busy="true" aria-label="Loading dashboard">
       <PageHeaderSkeleton />
-      <Skeleton className="h-40 w-full rounded-2xl" />
-      <Skeleton className="h-56 w-full rounded-2xl" />
+      <Skeleton className="h-40 w-full rounded-xl" />
+      <Skeleton className="h-56 w-full rounded-xl" />
       <div className="grid gap-6 lg:grid-cols-2">
-        <Skeleton className="h-48 w-full rounded-2xl" />
-        <Skeleton className="h-48 w-full rounded-2xl" />
+        <Skeleton className="h-48 w-full rounded-xl" />
+        <Skeleton className="h-48 w-full rounded-xl" />
       </div>
     </div>
   );
@@ -125,7 +106,7 @@ export function GroupsPageSkeleton() {
       <PageHeaderSkeleton withAction />
       <div className="space-y-4">
         {Array.from({ length: 3 }, (_, i) => (
-          <div key={i} className="rounded-2xl border border-[var(--border)] p-5 space-y-3">
+          <div key={i} className="rounded-xl border border-[var(--border)] p-5 space-y-3">
             <div className="flex items-start justify-between gap-3">
               <Skeleton className="h-6 w-40" />
               <Skeleton className="h-6 w-16 rounded-full" />
@@ -149,7 +130,7 @@ export function GroupShellSkeleton() {
         <Skeleton className="h-8 w-56" />
         <Skeleton className="h-4 w-80 max-w-full" />
       </div>
-      <Skeleton className="h-64 w-full rounded-2xl" />
+      <Skeleton className="h-64 w-full rounded-xl" />
     </div>
   );
 }
@@ -161,8 +142,8 @@ export function GroupDetailSkeleton() {
         <Skeleton className="h-9 w-24 rounded-lg" />
         <Skeleton className="h-9 w-28 rounded-lg" />
       </div>
-      <Skeleton className="h-36 w-full rounded-2xl" />
-      <div className="rounded-2xl border border-[var(--border)] p-4 space-y-3">
+      <Skeleton className="h-36 w-full rounded-xl" />
+      <div className="rounded-xl border border-[var(--border)] p-4 space-y-3">
         <Skeleton className="h-5 w-32" />
         {Array.from({ length: 4 }, (_, i) => (
           <div key={i} className="flex gap-4">
@@ -173,8 +154,8 @@ export function GroupDetailSkeleton() {
           </div>
         ))}
       </div>
-      <Skeleton className="h-48 w-full rounded-2xl" />
-      <Skeleton className="h-40 w-full rounded-2xl" />
+      <Skeleton className="h-48 w-full rounded-xl" />
+      <Skeleton className="h-40 w-full rounded-xl" />
     </div>
   );
 }
@@ -183,7 +164,7 @@ export function SubjectsGridSkeleton({ count = 4 }: { count?: number }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2" aria-busy="true">
       {Array.from({ length: count }, (_, i) => (
-        <div key={i} className="rounded-2xl border border-[var(--border)] p-5 space-y-3">
+        <div key={i} className="rounded-xl border border-[var(--border)] p-5 space-y-3">
           <Skeleton className="h-6 w-32" />
           <Skeleton className="h-4 w-full" />
           <Skeleton className="h-2 w-full" />
@@ -195,7 +176,7 @@ export function SubjectsGridSkeleton({ count = 4 }: { count?: number }) {
 
 export function SubjectsPageSkeleton() {
   return (
-    <div className="space-y-6" aria-busy="true" aria-label="Loading subjects">
+    <div className="space-y-6" aria-busy="true" aria-label="Loading tracks">
       <PageHeaderSkeleton withAction />
       <div className="flex gap-2">
         <Skeleton className="h-8 w-28 rounded-full" />
@@ -238,10 +219,10 @@ export function AnalyticsPageSkeleton() {
         ))}
       </div>
       <div className="grid gap-6 lg:grid-cols-2">
-        <Skeleton className="h-64 rounded-2xl" />
-        <Skeleton className="h-64 rounded-2xl" />
+        <Skeleton className="h-64 rounded-xl" />
+        <Skeleton className="h-64 rounded-xl" />
       </div>
-      <Skeleton className="h-72 w-full rounded-2xl" />
+      <Skeleton className="h-72 w-full rounded-xl" />
     </div>
   );
 }
@@ -257,8 +238,8 @@ export function ProfilePageSkeleton() {
         </div>
         <Skeleton className="h-[72px] w-[72px] rounded-full" />
       </div>
-      <Skeleton className="h-24 w-full rounded-2xl" />
-      <Skeleton className="h-40 w-full rounded-2xl" />
+      <Skeleton className="h-24 w-full rounded-xl" />
+      <Skeleton className="h-40 w-full rounded-xl" />
     </div>
   );
 }
@@ -267,9 +248,9 @@ export function InterviewPlanSkeleton() {
   return (
     <div className="space-y-6" aria-busy="true" aria-label="Loading preparation plan">
       <PageHeaderSkeleton withAction />
-      <Skeleton className="h-20 w-full rounded-2xl" />
+      <Skeleton className="h-20 w-full rounded-xl" />
       {Array.from({ length: 3 }, (_, i) => (
-        <div key={i} className="rounded-2xl border border-[var(--border)] p-5 space-y-3">
+        <div key={i} className="rounded-xl border border-[var(--border)] p-5 space-y-3">
           <Skeleton className="h-5 w-40" />
           <Skeleton className="h-4 w-full" />
           <Skeleton className="h-4 w-5/6" />
@@ -298,21 +279,10 @@ export function MockInterviewsSkeleton() {
   );
 }
 
-export function TasksPageSkeleton() {
-  return (
-    <div className="space-y-6" aria-busy="true" aria-label="Loading tasks">
-      <PageHeaderSkeleton withAction />
-      <Skeleton className="h-20 w-full rounded-2xl" />
-      <TaskListSkeleton rows={5} />
-    </div>
-  );
-}
-
 export function QuestionsPageSkeleton() {
   return (
     <div className="space-y-6" aria-busy="true" aria-label="Loading questions">
       <PageHeaderSkeleton withAction />
-      <TaskListSkeleton rows={3} />
       <QuestionListSkeleton />
     </div>
   );
@@ -322,10 +292,10 @@ export function SettingsPageSkeleton() {
   return (
     <div className="mx-auto max-w-2xl space-y-5 pb-8" aria-busy="true" aria-label="Loading settings">
       <PageHeaderSkeleton withAction />
-      <Skeleton className="h-36 w-full rounded-2xl" />
-      <Skeleton className="h-40 w-full rounded-2xl" />
-      <Skeleton className="h-48 w-full rounded-2xl" />
-      <Skeleton className="h-44 w-full rounded-2xl" />
+      <Skeleton className="h-36 w-full rounded-xl" />
+      <Skeleton className="h-40 w-full rounded-xl" />
+      <Skeleton className="h-48 w-full rounded-xl" />
+      <Skeleton className="h-44 w-full rounded-xl" />
     </div>
   );
 }
@@ -378,7 +348,7 @@ export function LoadingState({ message = "Loading..." }: { message?: string }) {
 export function LoadingOverlay({ label = "Loading" }: { label?: string }) {
   return (
     <div
-      className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-[var(--background)]/40 backdrop-blur-[1px]"
+      className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-[var(--background)]/40 backdrop-blur-[1px]"
       role="status"
       aria-live="polite"
       aria-label={label}

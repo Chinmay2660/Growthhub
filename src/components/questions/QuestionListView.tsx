@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import clsx from "clsx";
 import { ChevronDown, ChevronUp, ExternalLink, Eye } from "lucide-react";
 import Button from "@/components/ui/Button";
+import Checkbox from "@/components/ui/Checkbox";
 import { LoadingOverlay, QuestionRowsSkeleton } from "@/components/ui/StateViews";
 import dynamic from "next/dynamic";
 
@@ -14,6 +15,7 @@ import QuestionStatusSelect from "@/components/questions/QuestionStatusSelect";
 import type { QuestionPointBurst } from "@/lib/question-points-burst";
 import { useConfirm } from "@/components/providers/ConfirmProvider";
 import {
+  normalizeQuestionStatus,
   DEFAULT_QUESTION_TABLE_SORT,
   formatDate,
   questionMatchesSearch,
@@ -35,6 +37,12 @@ export type QuestionListItem = {
   link?: string;
   scope?: ContentScope;
 };
+
+/** Done and Revised both count as solved. */
+function isSolved(status: QuestionListItem["status"]): boolean {
+  const s = normalizeQuestionStatus(status);
+  return s === "done" || s === "revised";
+}
 
 function questionDateLabel(q: QuestionListItem): string {
   return q.practiceDate ? formatDate(q.practiceDate) : "Unscheduled";
@@ -76,11 +84,15 @@ function SortableHeader({
   className?: string;
 }) {
   if (!onSort) {
-    return <th className={className}>{label}</th>;
+    return <th scope="col" className={className}>{label}</th>;
   }
   const active = sortBy === field;
   return (
-    <th className={className}>
+    <th
+      scope="col"
+      className={className}
+      aria-sort={active ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
+    >
       <button
         type="button"
         onClick={() => onSort(field)}
@@ -175,11 +187,17 @@ export default function QuestionListView({
             key={q._id}
             style={questionRowVars(q.status)}
             className={clsx(
-              "question-row-card rounded-2xl border border-[var(--border)] p-4",
+              "question-row-card rounded-xl border border-[var(--border)] p-4",
               pointBurst?.id === q._id && "question-row-points-flash"
             )}
           >
             <div className="flex items-start justify-between gap-3">
+              <Checkbox
+                checked={isSolved(q.status)}
+                onChange={() => onStatusChange(q._id, isSolved(q.status) ? "not_started" : "done")}
+                aria-label={`Mark "${splitQuestionFields(q.content).title}" ${isSolved(q.status) ? "not done" : "done"}`}
+                className="mt-0.5"
+              />
               <p className="min-w-0 flex-1 text-sm font-medium line-clamp-2 text-[var(--foreground)]">
                 {splitQuestionFields(q.content).title}
               </p>
@@ -233,15 +251,16 @@ export default function QuestionListView({
 
       <div
         className={clsx(
-          "relative hidden min-h-48 rounded-2xl border border-[var(--border)] bg-[var(--surface)] lg:block"
+          "relative hidden min-h-48 rounded-xl border border-[var(--border)] bg-[var(--surface)] lg:block"
         )}
       >
         {loading && questions.length > 0 && <LoadingOverlay label="Loading questions" />}
         <div className="overflow-x-auto">
         <table className="w-full min-w-[48rem] border-separate border-spacing-y-1 text-left text-sm">
+          <caption className="sr-only">Practice questions</caption>
           <thead className="bg-[var(--surface-muted)] text-xs uppercase tracking-wide text-[var(--muted)]">
             <tr>
-              <th className={`${questionCol} px-4 py-3 font-semibold`}>Question</th>
+              <th scope="col" className={`${questionCol} px-4 py-3 font-semibold`}>Question</th>
               {showScope && (
                 <SortableHeader
                   label="Scope"
@@ -276,10 +295,10 @@ export default function QuestionListView({
                 onSort={onSort}
                 className={`${trackCol} px-4 py-3`}
               />
-              <th className={`${linkCol} px-2 py-3 font-semibold`}>Link</th>
-              <th className={`${viewCol} px-2 py-3 font-semibold`}>View</th>
+              <th scope="col" className={`${linkCol} px-2 py-3 font-semibold`}>Link</th>
+              <th scope="col" className={`${viewCol} px-2 py-3 font-semibold`}>View</th>
               {showActions && (
-                <th className={`${actionsCol} px-4 py-3 font-semibold`}>Actions</th>
+                <th scope="col" className={`${actionsCol} px-4 py-3 font-semibold`}>Actions</th>
               )}
             </tr>
           </thead>
@@ -308,9 +327,15 @@ export default function QuestionListView({
                 style={questionRowVars(q.status)}
               >
                 <td className="qs-row-cell px-4 py-3.5 text-[var(--foreground)]">
-                  <p className="line-clamp-2 font-medium">
-                    {splitQuestionFields(q.content).title}
-                  </p>
+                  <div className="flex items-start gap-3">
+                    <Checkbox
+                      checked={isSolved(q.status)}
+                      onChange={() => onStatusChange(q._id, isSolved(q.status) ? "not_started" : "done")}
+                      aria-label={`Mark "${splitQuestionFields(q.content).title}" ${isSolved(q.status) ? "not done" : "done"}`}
+                      className="mt-0.5"
+                    />
+                    <p className="line-clamp-2 font-medium">{splitQuestionFields(q.content).title}</p>
+                  </div>
                 </td>
                 {showScope && (
                   <td className="qs-row-cell px-4 py-3.5">

@@ -5,10 +5,10 @@ import { useRouter, usePathname } from "next/navigation";
 import { useUser } from "@/components/providers/UserProvider";
 import Sidebar from "./Sidebar";
 import MobileNav from "./MobileNav";
-import ShortcutsAndCapture, { OPEN_QUICK_CAPTURE_EVENT } from "./ShortcutsAndCapture";
-import { Plus } from "lucide-react";
+import KeyboardShortcuts from "./KeyboardShortcuts";
 import { AppShellSkeleton } from "@/components/ui/StateViews";
 import ThemeToggle from "@/components/ui/ThemeToggle";
+import GroupSwitcher from "./GroupSwitcher";
 import { getHomePath } from "@/lib/home";
 
 const PUBLIC_PATHS = ["/login", "/register"];
@@ -47,20 +47,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="fixed inset-0 flex overflow-hidden">
+      <a href="#app-main" className="skip-link">
+        Skip to content
+      </a>
       <Sidebar />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <div className="flex shrink-0 items-center justify-end gap-2 px-4 pt-4 sm:px-6 lg:hidden">
-          {user.activeGroupId && (
-            <button
-              type="button"
-              onClick={() => window.dispatchEvent(new Event(OPEN_QUICK_CAPTURE_EVENT))}
-              aria-label="Quick capture"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)] px-2.5 py-2 text-sm font-medium text-[var(--muted)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--foreground)]"
-            >
-              <Plus className="h-4 w-4" aria-hidden />
-              <span>Capture</span>
-            </button>
-          )}
+          <GroupSwitcher className="min-w-0 flex-1" />
           <ThemeToggle />
         </div>
         {user.isGuest && (
@@ -70,12 +63,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         )}
         <main
           id="app-main"
-          className="min-h-0 flex-1 overflow-y-auto px-4 py-6 pb-24 sm:px-6 lg:px-8 lg:pb-8 lg:pt-8"
+          tabIndex={-1}
+          className="min-h-0 flex-1 focus:outline-none overflow-y-auto px-4 py-6 pb-24 sm:px-6 lg:px-8 lg:pb-8 lg:pt-8"
         >
-          <div className="mx-auto max-w-6xl">{children}</div>
+          {/* Remount the page when the active group changes so filters/selection from the old group never carry over. */}
+          <div key={user.activeGroupId ?? "none"} className="mx-auto max-w-6xl">
+            {children}
+          </div>
         </main>
         <MobileNav />
-        <ShortcutsAndCapture />
+        <KeyboardShortcuts />
       </div>
     </div>
   );

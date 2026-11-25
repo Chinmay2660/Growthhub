@@ -4,16 +4,22 @@ export default function Card({
   children,
   className,
   padded = true,
+  padding = "md",
 }: {
   children: React.ReactNode;
   className?: string;
+  /** @deprecated use `padding="none"` */
   padded?: boolean;
+  /** Inner padding: "md" (default, p-5), "sm" (p-4) or "none". */
+  padding?: "none" | "sm" | "md";
 }) {
+  const pad = padded ? padding : "none";
   return (
     <div
       className={clsx(
         "rounded-xl bg-[var(--card)] shadow-soft",
-        padded && "p-5",
+        pad === "md" && "p-5",
+        pad === "sm" && "p-4",
         className
       )}
     >

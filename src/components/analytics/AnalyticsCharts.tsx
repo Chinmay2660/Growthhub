@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import Card, { CardHeader } from "@/components/ui/Card";
+import AnalyticsTrends from "@/components/analytics/AnalyticsTrends";
 import type { AnalyticsData } from "@/types";
 
 function StatCard({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
@@ -49,6 +50,8 @@ export default function AnalyticsCharts({ data, currentUserId }: AnalyticsCharts
 
   return (
     <div className="space-y-8">
+      <AnalyticsTrends data={data} />
+
       <section className="space-y-4">
         <div>
           <h2 className="text-lg font-semibold text-[var(--foreground)]">Group</h2>
@@ -60,7 +63,7 @@ export default function AnalyticsCharts({ data, currentUserId }: AnalyticsCharts
             value={`${group.summary.yourDone}/${group.summary.totalQuestions}`}
             hint="Your shared questions"
           />
-          <StatCard label="Your points" value={group.summary.yourPoints} />
+          <StatCard label="Questions solved" value={group.summary.yourPoints} />
           <StatCard label="Members" value={group.summary.memberCount} />
         </div>
         <Card>
@@ -71,7 +74,7 @@ export default function AnalyticsCharts({ data, currentUserId }: AnalyticsCharts
           <div className="grid gap-6 lg:grid-cols-2">
             {group.leaderboard.length > 0 && (
               <Card>
-                <CardHeader title="Leaderboard" subtitle="Group question points" />
+                <CardHeader title="Leaderboard" subtitle="Group questions solved" />
                 <ul className="space-y-2">
                   {group.leaderboard.map((m, i) => (
                     <li
@@ -86,7 +89,7 @@ export default function AnalyticsCharts({ data, currentUserId }: AnalyticsCharts
                         {m.name}
                         {currentUserId === m.userId ? " (you)" : ""}
                       </Link>
-                      <span className="font-semibold text-brand">{m.points} pts</span>
+                      <span className="font-semibold text-brand">{m.points} solved</span>
                     </li>
                   ))}
                 </ul>
@@ -108,10 +111,6 @@ export default function AnalyticsCharts({ data, currentUserId }: AnalyticsCharts
             hint={`${personal.summary.totalQuestions} total`}
           />
           <StatCard label="Study streak" value={`${personal.summary.studyStreak} days`} />
-          <StatCard
-            label="Tasks done"
-            value={`${personal.summary.tasksCompleted}/${personal.summary.tasksTotal}`}
-          />
         </div>
         <Card>
           <CardHeader title="Personal questions" subtitle="By status" />

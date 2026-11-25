@@ -8,6 +8,7 @@ import {
   roundInterviewDates,
   isOnMockInterviewDate,
   upsertMockInterviewSlot,
+  createNextMockRound,
 } from "@/lib/mock-rounds";
 import MockInterviewRound from "@/models/MockInterviewRound";
 import MockInterviewSession from "@/models/MockInterviewSession";
@@ -110,14 +111,20 @@ export const GET = withAuth(async (request, { userId }) => {
                 question: q.question,
                 source: q.source,
               })),
-              scores: sessionScores.map((s) => ({
-                interviewerId: s.interviewerId ? String(s.interviewerId) : undefined,
-                interviewerName: s.interviewerId
-                  ? userMap.get(String(s.interviewerId)) ?? s.interviewer
-                  : s.interviewer,
-                score: s.score,
-                weaknesses: s.weaknesses,
-              })),
+              scores: sessionScores.map((s) => {
+                const isInterviewee = String(session.intervieweeId) === userId;
+                const isAuthor = s.interviewerId ? String(s.interviewerId) === userId : false;
+                return {
+                  interviewerId: s.interviewerId ? String(s.interviewerId) : undefined,
+                  interviewerName: s.interviewerId
+                    ? userMap.get(String(s.interviewerId)) ?? s.interviewer
+                    : s.interviewer,
+                  score: s.score,
+                  ...(isInterviewee || isAuthor
+                    ? { weaknesses: s.weaknesses ?? [], rubric: s.rubric, feedback: s.feedback }
+                    : {}),
+                };
+              }),
               expectedScorers,
               currentUserHasScored: sessionScores.some(
                 (s) => String(s.interviewerId) === userId
@@ -158,11 +165,32 @@ export const PATCH = withAuth(async (request, { userId }) => {
   const role = isGroupMember(group, userId);
   if (!role) return jsonError("Unauthorized", 403);
 
-  if (action === "addMockDate") {
-    return jsonError(
-      "Only one mock round is active. Update the group mock date instead.",
-      400
-    );
+  // Start the next round once the current one has happened.
+  if (action === "startNextRound" || action === "addMockDate") {
+    if (!canManageGroup(role)) return jsonError("Only admins and co-admins can start a new round", 403);
+    if (!scheduledAt) return jsonError("scheduledAt is required");
+    const parsed = parseAppDateTime(scheduledAt);
+    if (Number.isNaN(parsed.getTime())) return jsonError("Invalid scheduledAt");
+    if (parsed.getTime() <= Date.now()) return jsonError("Pick a date and time in the future");
+
+    const rounds = await listMockRounds(groupId);
+    const current = getCurrentRound(rounds);
+    const currentDate = current?.interviewDate ? new Date(current.interviewDate) : null;
+    if (currentDate && currentDate.getTime() > Date.now() && !isOnMockInterviewDate(currentDate)) {
+      return jsonError("The current round hasn't happened yet. Change its date instead.", 400);
+    }
+
+    const round = await createNextMockRound(groupId, parsed);
+    for (const m of group.members) {
+      await upsertMockInterviewSlot({
+        groupId,
+        roundId: String(round._id),
+        intervieweeId: String(m.userId),
+        scheduledAt: parsed,
+        scheduledBy: userId,
+      });
+    }
+    return jsonOk({ roundId: String(round._id), roundNumber: round.roundNumber, scheduledAt: parsed.toISOString() });
   }
 
   if (!roundId) return jsonError("roundId is required");
@@ -179,6 +207,7 @@ export const PATCH = withAuth(async (request, { userId }) => {
 
     const parsed = parseAppDateTime(scheduledAt);
     if (Number.isNaN(parsed.getTime())) return jsonError("Invalid scheduledAt");
+    if (parsed.getTime() < Date.now() - 60_000) return jsonError("The mock date can't be in the past");
 
     await MockInterviewRound.findByIdAndUpdate(roundId, {
       interviewDate: parsed,

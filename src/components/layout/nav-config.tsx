@@ -1,7 +1,6 @@
 import {
   LayoutDashboard,
   CircleHelp,
-  ListChecks,
   Users,
   TrendingUp,
   Settings,
@@ -66,7 +65,6 @@ export function buildMainNav(activeGroupId?: string): NavItem[] {
   nav.push(
     { id: "questions", href: "/questions", label: "Questions", icon: CircleHelp },
     { id: "subjects", href: "/subjects", label: "Tracks", icon: BookOpen },
-    { id: "tasks", href: "/tasks", label: "Tasks", icon: ListChecks },
     {
       id: "groups",
       href: "/groups",
@@ -90,7 +88,7 @@ export function buildMainNav(activeGroupId?: string): NavItem[] {
 
 export const MAIN_NAV: NavItem[] = buildMainNav();
 
-const MOBILE_PRIMARY_HREFS = ["/dashboard", "/questions", "/tasks", EXTERNAL_CAREERFLOW_HREF];
+const MOBILE_PRIMARY_HREFS = ["/dashboard", "/questions", EXTERNAL_CAREERFLOW_HREF];
 
 export function buildMobileNav(activeGroupId?: string): NavItem[] {
   const nav = buildMainNav(activeGroupId);

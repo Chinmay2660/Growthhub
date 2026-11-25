@@ -6,6 +6,7 @@ const PUBLIC_API = [
   "/api/auth/login",
   "/api/auth/register",
   "/api/auth/guest",
+  "/api/auth/recover",
   "/api/auth/google",
   "/api/auth/sso-callback",
 ];
@@ -74,5 +75,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|sw.js).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.svg|sw.js).*)"],
 };

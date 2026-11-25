@@ -3,6 +3,7 @@ import mongoose, { Schema, Document, Model } from "mongoose";
 export interface IUser extends Document {
   username?: string;
   authCodeHash?: string;
+  recoveryKeyHash?: string;
   name: string;
   email?: string;
   avatar?: string;
@@ -10,6 +11,8 @@ export interface IUser extends Document {
   onboardingComplete: boolean;
   preparationLevel: "beginner" | "intermediate" | "advanced";
   dailyStudyMinutes: number;
+  /** Questions the person aims to solve each day (drives the dashboard's daily ring). */
+  dailyQuestionGoal: number;
   activeGroupId?: mongoose.Types.ObjectId;
   theme: "light" | "dark" | "system";
   studyStreak: number;
@@ -27,6 +30,7 @@ const UserSchema = new Schema<IUser>(
   {
     username: { type: String, unique: true, sparse: true, lowercase: true, trim: true },
     authCodeHash: { type: String, select: false },
+    recoveryKeyHash: { type: String, select: false },
     name: { type: String, required: true, trim: true },
     email: { type: String, trim: true, lowercase: true, unique: true, sparse: true },
     avatar: { type: String },
@@ -38,6 +42,7 @@ const UserSchema = new Schema<IUser>(
       default: "intermediate",
     },
     dailyStudyMinutes: { type: Number, default: 120 },
+    dailyQuestionGoal: { type: Number, default: 3, min: 1, max: 50 },
     activeGroupId: { type: Schema.Types.ObjectId, ref: "Group" },
     theme: { type: String, enum: ["light", "dark", "system"], default: "system" },
     studyStreak: { type: Number, default: 0 },

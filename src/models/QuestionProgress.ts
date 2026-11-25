@@ -3,7 +3,7 @@ import mongoose, { Schema, Document, Model } from "mongoose";
 export interface IQuestionProgress extends Document {
   userId: mongoose.Types.ObjectId;
   questionId: mongoose.Types.ObjectId;
-  status: "not_started" | "add_to_todo" | "in_progress" | "revised" | "done";
+  status: "not_started" | "in_progress" | "revised" | "done";
   confidence: "weak" | "okay" | "strong";
   lastPracticed?: Date;
   firstCompletedAt?: Date;
@@ -21,7 +21,7 @@ const QuestionProgressSchema = new Schema<IQuestionProgress>(
     questionId: { type: Schema.Types.ObjectId, ref: "PracticeQuestion", required: true },
     status: {
       type: String,
-      enum: ["not_started", "add_to_todo", "in_progress", "revised", "done"],
+      enum: ["not_started", "in_progress", "revised", "done"],
       default: "not_started",
     },
     confidence: { type: String, enum: ["weak", "okay", "strong"], default: "weak" },

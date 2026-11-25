@@ -1,6 +1,6 @@
 import { connectToDatabase } from "@/lib/mongodb";
 import { requireAuthUserId, unauthorized } from "@/lib/api-auth";
-import { jsonOk, jsonError, istDateKey, addIstDays, startOfDay, normalizeQuestionStatus, normalizeTopicStatus } from "@/lib/utils";
+import { jsonOk, jsonError, istDateKey, addIstDays, startOfDay, normalizeQuestionStatus, normalizeTopicStatus, currentStreak } from "@/lib/utils";
 import {
   activityByDay,
   countQuestionsByStatus,
@@ -10,7 +10,7 @@ import {
 import { questionStatusForUser } from "@/lib/question-progress";
 import { NATIVE_PERSONAL_QUESTION_FILTER } from "@/lib/practice-question-filters";
 import { buildMemberGamification } from "@/lib/question-gamification";
-import { getGroupInsights } from "@/lib/services";
+import { getGroupInsights, resolveActiveGroupId } from "@/lib/services";
 import { analyticsCacheKey, getCached } from "@/lib/ttl-cache";
 import User from "@/models/User";
 import Group from "@/models/Group";
@@ -20,7 +20,6 @@ import TopicProgress from "@/models/TopicProgress";
 import MockInterview from "@/models/MockInterview";
 import PracticeQuestion from "@/models/PracticeQuestion";
 import QuestionProgress from "@/models/QuestionProgress";
-import PrepTask from "@/models/PrepTask";
 import StudySession from "@/models/StudySession";
 import type { AnalyticsData } from "@/types";
 import mongoose from "mongoose";
@@ -33,14 +32,14 @@ export async function GET(request: Request) {
     await connectToDatabase();
 
     const user = await User.findById(userId)
-      .select("activeGroupId studyStreak name")
+      .select("activeGroupId studyStreak lastStudyDate name")
       .lean();
-    if (!user?.activeGroupId) return jsonError("No active group", 400);
-
-    const groupId = String(user.activeGroupId);
+    if (!user) return jsonError("User not found", 404);
+    const groupId = await resolveActiveGroupId(userId, user.activeGroupId);
+    if (!groupId) return jsonError("No active group", 400);
 
     const data = await getCached(analyticsCacheKey(userId, groupId), ANALYTICS_TTL_MS, () =>
-      buildAnalytics(userId, groupId, user.name ?? "You", user.studyStreak ?? 0)
+      buildAnalytics(userId, groupId, user.name ?? "You", currentStreak(user.studyStreak, user.lastStudyDate))
     );
 
     return jsonOk(data);
@@ -59,7 +58,7 @@ async function buildAnalytics(
   const userObjectId = new mongoose.Types.ObjectId(userId);
   const weekAgo = startOfDay(addIstDays(new Date(), -6));
 
-  const [subjects, topics, mocks, group, personalQuestions, groupQuestions, taskStats, studyMinutesAgg] =
+  const [subjects, topics, mocks, group, personalQuestions, groupQuestions, studyMinutesAgg] =
     await Promise.all([
       Subject.find({
         $or: [
@@ -83,10 +82,6 @@ async function buildAnalytics(
       PracticeQuestion.find({ groupId, scope: "group" })
         .select("_id subjectId practiceDate createdAt")
         .lean(),
-      PrepTask.aggregate<{ _id: string; count: number }>([
-        { $match: { userId: userObjectId, groupId: new mongoose.Types.ObjectId(groupId) } },
-        { $group: { _id: "$status", count: { $sum: 1 } } },
-      ]),
       StudySession.aggregate<{ total: number }>([
         {
           $match: {
@@ -144,7 +139,7 @@ async function buildAnalytics(
     return {
       subjectId: q.subjectId,
       status,
-      completedAt: p?.lastPracticed ?? p?.firstCompletedAt ?? q.lastPracticed ?? q.firstCompletedAt,
+      completedAt: p?.firstCompletedAt ?? p?.lastPracticed ?? q.firstCompletedAt ?? q.lastPracticed,
       practiceDate: q.practiceDate ?? q.createdAt,
     };
   });
@@ -155,7 +150,7 @@ async function buildAnalytics(
     return {
       subjectId: q.subjectId,
       status,
-      completedAt: p?.lastPracticed ?? p?.firstCompletedAt,
+      completedAt: p?.firstCompletedAt ?? p?.lastPracticed,
       practiceDate: q.practiceDate ?? q.createdAt,
     };
   });
@@ -177,8 +172,6 @@ async function buildAnalytics(
   });
   const myGamification = buildMemberGamification(userId, userName, groupGamificationInput, 14);
 
-  const tasksCompleted = taskStats.find((t) => t._id === "completed")?.count ?? 0;
-  const tasksTotal = taskStats.reduce((s, t) => s + t.count, 0);
   const studyMinutesWeek = studyMinutesAgg[0]?.total ?? 0;
 
   const progressMap = new Map(topicProgress.map((p) => [String(p.topicId), p]));
@@ -231,8 +224,6 @@ async function buildAnalytics(
           (q) => normalizeQuestionStatus(q.status) === "in_progress"
         ).length,
         studyMinutesWeek,
-        tasksCompleted,
-        tasksTotal,
         studyStreak,
       },
       byStatus: countQuestionsByStatus(personalWithStatus.map((q) => q.status)),

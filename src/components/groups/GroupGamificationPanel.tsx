@@ -10,17 +10,37 @@ export default function GroupGamificationPanel({
 }: {
   gamification: GroupGamification;
 }) {
-  const maxPoints = gamification.leaderboard[0]?.totalPoints ?? 0;
+  const board = gamification.leaderboard;
+  const totalSolved = board.reduce((n, m) => n + m.totalPoints, 0);
+  const bank = board[0] ? board[0].totalPoints + board[0].pending : 0;
+  const possible = bank * board.length;
+  const overallPct = possible > 0 ? Math.round((totalSolved / possible) * 100) : 0;
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      <Card className="!p-4">
-        <CardHeader title="Leaderboard" subtitle="Points from group questions" />
-        <GroupLeaderboardChart members={gamification.leaderboard} maxPoints={maxPoints} />
+      <Card padding="sm">
+        <CardHeader title="Leaderboard" subtitle="Group questions solved" />
+        {board.length > 0 && (
+          <dl className="mb-4 grid grid-cols-3 gap-2 rounded-xl bg-[var(--surface-muted)] p-3 text-center">
+            <div>
+              <dt className="text-[11px] text-[var(--muted)]">Group total</dt>
+              <dd className="text-lg font-semibold tabular-nums">{totalSolved}</dd>
+            </div>
+            <div>
+              <dt className="text-[11px] text-[var(--muted)]">Of possible</dt>
+              <dd className="text-lg font-semibold tabular-nums">{possible}</dd>
+            </div>
+            <div>
+              <dt className="text-[11px] text-[var(--muted)]">Complete</dt>
+              <dd className="text-lg font-semibold tabular-nums">{overallPct}%</dd>
+            </div>
+          </dl>
+        )}
+        <GroupLeaderboardChart members={board} />
       </Card>
 
-      <Card className="!p-4">
-        <CardHeader title="Points this week" subtitle="Group total per day" />
+      <Card padding="sm">
+        <CardHeader title="Solved this week" subtitle="Group questions solved per day" />
         <div className="h-52">
           <StudyHoursChart
             data={gamification.dailyPoints.map((d) => ({
@@ -29,7 +49,7 @@ export default function GroupGamificationPanel({
               date: d.date,
             }))}
             color="var(--accent)"
-            valueSuffix="pts"
+            valueSuffix="solved"
           />
         </div>
       </Card>

@@ -1,14 +1,17 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
-import Link from "next/link";
+import { useDocumentTitle } from "@/lib/use-document-title";
+import { useEffect, useState, useCallback, useMemo, useId } from "react";
 import { useUser } from "@/components/providers/UserProvider";
 import { apiGet, apiPost, apiPatch, apiDelete, getErrorMessage } from "@/lib/api";
 import Button from "@/components/ui/Button";
 import Chip from "@/components/ui/Chip";
 import MultiSelect from "@/components/ui/MultiSelect";
-import FormField from "@/components/ui/FormField";
+import Select from "@/components/ui/Select";
+import DatePicker from "@/components/ui/DatePicker";
+import QuestionFormModal from "@/components/questions/QuestionFormModal";
 import Modal from "@/components/ui/Modal";
+import ModalFooter from "@/components/ui/ModalFooter";
 import MotivationBanner from "@/components/dashboard/MotivationBanner";
 import {
   QuestionsPageSkeleton,
@@ -21,7 +24,6 @@ import {
   joinQuestionFields,
   splitQuestionFields,
   questionPracticeDay,
-  toDateInputValue,
   QUESTION_DATE_PERIODS,
   normalizeQuestionStatus,
   DEFAULT_QUESTION_TABLE_SORT,
@@ -53,13 +55,11 @@ type PagedQuestions = {
 };
 
 const PAGE_SIZE = 10;
-const MODAL_FIELD =
-  "w-full min-w-0 rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2 text-sm text-[var(--foreground)] placeholder:text-[var(--muted)]";
-
 function FilterRow({ label, children }: { label: string; children: React.ReactNode }) {
+  const labelId = useId();
   return (
-    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-      <span className="w-20 shrink-0 text-sm font-medium text-[var(--muted)]">
+    <div role="group" aria-labelledby={labelId} className="flex flex-col gap-2 sm:flex-row sm:items-center">
+      <span id={labelId} className="w-20 shrink-0 text-sm font-medium text-[var(--muted)]">
         {label}
       </span>
       <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">{children}</div>
@@ -69,6 +69,7 @@ function FilterRow({ label, children }: { label: string; children: React.ReactNo
 
 export default function QuestionsPage() {
   const { user } = useUser();
+  useDocumentTitle("Questions");
   const [questions, setQuestions] = useState<QuestionWithSubject[]>([]);
   const [pointBurst, setPointBurst] = useState<QuestionPointBurst | null>(null);
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -157,6 +158,7 @@ export default function QuestionsPage() {
       ]);
       setSubjects(subjectData);
       setCanAddGroupQuestions(canManageGroup(groupHeader.myRole));
+      setError("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load questions");
     }
@@ -183,6 +185,7 @@ export default function QuestionsPage() {
       });
       setQuestions(questionData.items);
       setTotal(questionData.total);
+      setError("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load questions");
     } finally {
@@ -332,9 +335,6 @@ export default function QuestionsPage() {
         )
       );
       triggerQuestionPointsBurst(setPointBurst, id, updated.pointsEarnedNow);
-      if (normalized === "add_to_todo") {
-        toast.success("Added to Tasks");
-      }
     } catch (err) {
       setQuestions((prev) =>
         prev.map((q) => (String(q._id) === String(id) ? { ...q, status: previousStatus } : q))
@@ -368,9 +368,7 @@ export default function QuestionsPage() {
         title="No active group"
         description="Join or create a group to start tracking practice questions."
         action={
-          <Link href="/groups">
-            <Button>Browse Groups</Button>
-          </Link>
+          <Button href="/groups">Browse Groups</Button>
         }
       />
     );
@@ -379,7 +377,17 @@ export default function QuestionsPage() {
   if (initialLoad && loading) {
     return <QuestionsPageSkeleton />;
   }
-  if (error) return <ErrorState message={error} onRetry={load} />;
+  if (error) {
+    return (
+      <ErrorState
+        message={error}
+        onRetry={() => {
+          void loadMeta();
+          void load();
+        }}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -502,15 +510,16 @@ export default function QuestionsPage() {
       <Modal open={showFilters} onClose={() => setShowFilters(false)} title="Filters" size="sm">
         <div className="space-y-4">
           <FilterRow label="Scope">
-            <select
+            <Select
               value={draft.scope}
-              onChange={(e) => setDraft((d) => ({ ...d, scope: e.target.value as "all" | ContentScope }))}
-              className="w-full rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-1.5 text-sm text-[var(--foreground)] sm:min-w-0 sm:flex-1"
-            >
-              <option value="all">All</option>
-              <option value="group">Group</option>
-              <option value="personal">Personal</option>
-            </select>
+              onChange={(v) => setDraft((d) => ({ ...d, scope: v as "all" | ContentScope }))}
+              aria-label="Scope"
+              options={[
+                { value: "all", label: "All" },
+                { value: "group", label: "Group" },
+                { value: "personal", label: "Personal" },
+              ]}
+            />
           </FilterRow>
           <FilterRow label="Status">
             <MultiSelect
@@ -530,153 +539,86 @@ export default function QuestionsPage() {
           </FilterRow>
           <FilterRow label="Date">
             <div className="grid w-full grid-cols-2 gap-2">
-              <label className="text-xs text-[var(--muted)]">
+              <div className="text-xs text-[var(--muted)]">
                 From
-                <input
-                  type="date"
+                <DatePicker
                   value={draft.from}
                   max={draft.to || undefined}
-                  onChange={(e) => setDraft((d) => ({ ...d, from: e.target.value }))}
-                  className="mt-0.5 w-full rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] px-2 py-1.5 text-sm text-[var(--foreground)]"
+                  onChange={(v) => setDraft((d) => ({ ...d, from: v }))}
+                  aria-label="From date"
+                  clearable
+                  className="mt-0.5 text-sm"
                 />
-              </label>
-              <label className="text-xs text-[var(--muted)]">
+              </div>
+              <div className="text-xs text-[var(--muted)]">
                 To
-                <input
-                  type="date"
+                <DatePicker
                   value={draft.to}
                   min={draft.from || undefined}
-                  onChange={(e) => setDraft((d) => ({ ...d, to: e.target.value }))}
-                  className="mt-0.5 w-full rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] px-2 py-1.5 text-sm text-[var(--foreground)]"
+                  onChange={(v) => setDraft((d) => ({ ...d, to: v }))}
+                  aria-label="To date"
+                  clearable
+                  className="mt-0.5 text-sm"
                 />
-              </label>
+              </div>
             </div>
           </FilterRow>
-          <div className="flex justify-between gap-2 pt-2">
-            <Button variant="ghost" size="sm"
-              onClick={() => setDraft({ scope: "all", status: [], subject: [], from: "", to: "" })}>
-              Reset
-            </Button>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => setShowFilters(false)}>Cancel</Button>
-              <Button size="sm" onClick={applyFilters}>Apply</Button>
-            </div>
-          </div>
+          <ModalFooter
+            className="!mt-4"
+            onCancel={() => setShowFilters(false)}
+            start={
+              <Button
+                variant="outline"
+                onClick={() => setDraft({ scope: "all", status: [], subject: [], from: "", to: "" })}
+              >
+                Reset
+              </Button>
+            }
+          >
+            <Button onClick={applyFilters}>Apply</Button>
+          </ModalFooter>
         </div>
       </Modal>
 
-      <Modal
+      <QuestionFormModal
         open={showModal}
         onClose={closeModal}
-        title={editingId ? "Edit Question" : "Add Question"}
-        size="lg"
-      >
-        <div className="space-y-5">
-          <FormField label="Title">
-            <input
-              type="text"
-              value={questionTitle}
-              onChange={(e) => setQuestionTitle(e.target.value)}
-              placeholder="TCP vs UDP"
-              className={MODAL_FIELD}
-              autoFocus
-            />
-          </FormField>
-          <FormField label="Description">
-            <textarea
-              value={questionDescription}
-              onChange={(e) => setQuestionDescription(e.target.value)}
-              placeholder="Explain connection-oriented vs connectionless delivery, use cases, and trade-offs."
-              rows={3}
-              className={MODAL_FIELD}
-            />
-          </FormField>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <FormField label="Track">
-              {trackOptions.length === 0 ? (
-                <p className="rounded-lg border border-dashed border-[var(--border)] px-3 py-2 text-sm text-[var(--muted)]">
-                  No {scope} tracks yet.{" "}
-                  <Link href="/subjects" className="text-brand hover:underline">Create one</Link>
-                </p>
-              ) : (
-                <select
-                  value={subjectId}
-                  onChange={(e) => setSubjectId(e.target.value)}
-                  className={MODAL_FIELD}
-                >
-                  {trackOptions.map((s) => (
-                    <option key={s._id} value={s._id}>
-                      {formatSubjectTrack(s)}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </FormField>
-            <FormField
-              label="Visibility"
-              hint={
-                !editingId && !canAddGroupQuestions
-                  ? "Group questions require admin or co-admin."
-                  : undefined
-              }
-            >
-              {!editingId && canAddGroupQuestions ? (
-                <select
-                  value={scope}
-                  onChange={(e) => setScope(e.target.value as ContentScope)}
-                  className={MODAL_FIELD}
-                >
-                  <option value="group">Group — shared with everyone</option>
-                  <option value="personal">Personal — only you</option>
-                </select>
-              ) : (
-                <div className={`${MODAL_FIELD} flex items-center text-[var(--muted)]`}>
-                  {scope === "group" ? "Group — shared with everyone" : "Personal — only you"}
-                </div>
-              )}
-            </FormField>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <FormField label="Practice date" hint="Leave empty to keep in All only until scheduled.">
-              <input
-                type="date"
-                value={practiceDate}
-                onChange={(e) => setPracticeDate(e.target.value)}
-                className={`${MODAL_FIELD} input-date-end`}
-              />
-            </FormField>
-            <FormField label="Link (optional)">
-              <input
-                type="url"
-                value={link}
-                onChange={(e) => setLink(e.target.value)}
-                placeholder="https://..."
-                className={MODAL_FIELD}
-              />
-            </FormField>
-          </div>
-
-          {!editingId && (
-            <p className="text-xs text-[var(--muted)]">
-              New questions start as <strong>Not Started</strong>. Use <strong>Add to do</strong> to queue one in Tasks.
-            </p>
-          )}
-          <div className="flex justify-end gap-2 border-t border-[var(--border)] pt-4">
-            <Button variant="ghost" onClick={closeModal} disabled={saving}>
-              Cancel
-            </Button>
-            <Button
-              onClick={saveQuestion}
-              loading={saving}
-              disabled={!questionTitle.trim() || !subjectId || trackOptions.length === 0}
-            >
-              {saving ? "Saving…" : editingId ? "Save Changes" : "Save Question"}
-            </Button>
-          </div>
-        </div>
-      </Modal>
+        editing={Boolean(editingId)}
+        values={{
+          title: questionTitle,
+          description: questionDescription,
+          link,
+          subjectId,
+          practiceDate,
+          scope,
+        }}
+        onChange={(patch) => {
+          if (patch.title !== undefined) setQuestionTitle(patch.title);
+          if (patch.description !== undefined) setQuestionDescription(patch.description);
+          if (patch.link !== undefined) setLink(patch.link);
+          if (patch.subjectId !== undefined) setSubjectId(patch.subjectId);
+          if (patch.practiceDate !== undefined) setPracticeDate(patch.practiceDate);
+          if (patch.scope !== undefined) setScope(patch.scope);
+        }}
+        tracks={trackOptions}
+        canChooseScope={!editingId && canAddGroupQuestions}
+        scopeHint={!editingId && !canAddGroupQuestions ? "Group questions require admin or co-admin." : undefined}
+        saving={saving}
+        onSave={saveQuestion}
+        onCreateTrack={async (name) => {
+          try {
+            await apiPost("/api/subjects", {
+              ...(scope === "group" ? { groupId: activeGroupId } : {}),
+              name,
+              scope,
+            });
+            toast.success("Track created");
+            await loadMeta();
+          } catch (err) {
+            toast.error(getErrorMessage(err, "Couldn't create the track"));
+          }
+        }}
+      />
     </div>
   );
 }

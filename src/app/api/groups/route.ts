@@ -3,6 +3,7 @@ import { requireAuthUserId, unauthorized } from "@/lib/api-auth";
 import { joinCodeExpiryDate, jsonOk, jsonError } from "@/lib/utils";
 import { generateJoinCode } from "@/lib/auth";
 import { serializeDoc, seedGroupSubjects } from "@/lib/services";
+import { canManageGroup } from "@/lib/group-roles";
 import Group from "@/models/Group";
 import User from "@/models/User";
 import Subject from "@/models/Subject";
@@ -29,8 +30,14 @@ export async function GET(request: Request) {
 
     const result = groups.map((g) => {
       const me = g.members.find((m) => String(m.userId) === userId);
+      const serialized: Record<string, unknown> = { ...serializeDoc(g) };
+      // Only admins and co-admins can invite, so only they get the code; members could otherwise share it.
+      if (!canManageGroup(me?.role)) {
+        delete serialized.joinCode;
+        delete serialized.joinCodeExpiresAt;
+      }
       return {
-        ...serializeDoc(g),
+        ...serialized,
         memberCount: g.members.length,
         subjects: subjectsByGroup.get(String(g._id)) ?? [],
         myRole: me?.role ?? null,

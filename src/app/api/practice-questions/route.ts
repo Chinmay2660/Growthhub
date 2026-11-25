@@ -5,7 +5,6 @@ import {
   jsonError,
   parseDateInput,
   addIstDays,
-  startOfDay,
   formatSubjectTrack,
   normalizeQuestionStatus,
   questionDatePeriodRange,
@@ -58,34 +57,33 @@ export async function GET(request: Request) {
     const period = searchParams.get("period") as QuestionDatePeriod | null;
     const scope = searchParams.get("scope") as ContentScope | "all" | null;
 
-    if (!groupId) return jsonError("groupId is required");
-
-    const [group, subjects] = await Promise.all([
-      Group.findById(groupId).select("_id members createdBy").lean(),
-      Subject.find({
-        $or: [
-          { groupId, scope: "group", isActive: true },
-          { userId, scope: "personal", isActive: true },
-        ],
-      })
-        .select("_id name totalQuestions contentUnit")
-        .lean(),
-    ]);
-    if (!group || !isGroupMember(group, userId)) {
-      return jsonError("Not a member of this group", 403);
+    // groupId is optional: leave it out (or send "all") for every group the person is in, or pass one group.
+    const myGroups = await Group.find({ "members.userId": userId }).select("_id name members").lean();
+    let groupIds = myGroups.map((g) => String(g._id));
+    if (groupId && groupId !== "all") {
+      if (!mongoose.isValidObjectId(groupId) || !groupIds.includes(groupId)) {
+        return jsonError("Not a member of this group", 403);
+      }
+      groupIds = [groupId];
     }
+    const groupNames = new Map(myGroups.map((g) => [String(g._id), g.name]));
+
+    const subjects = await Subject.find({
+      $or: [
+        { groupId: { $in: groupIds }, scope: "group", isActive: true },
+        { userId, scope: "personal", isActive: true },
+      ],
+    })
+      .select("_id name totalQuestions contentUnit")
+      .lean();
 
     const filters: Record<string, unknown>[] = [];
     if (!scope || scope === "all" || scope === "group") {
-      filters.push({ groupId, scope: "group" });
+      filters.push({ groupId: { $in: groupIds }, scope: "group" });
     }
     if (!scope || scope === "all" || scope === "personal") {
-      filters.push({
-        groupId,
-        userId,
-        scope: "personal",
-        ...NATIVE_PERSONAL_QUESTION_FILTER,
-      });
+      // Personal questions belong to the person, whichever group they were created under.
+      filters.push({ userId, scope: "personal", ...NATIVE_PERSONAL_QUESTION_FILTER });
     }
 
     const questionFilter: Record<string, unknown> =
@@ -181,6 +179,7 @@ export async function GET(request: Request) {
       q: {
       _id: unknown;
       scope: string;
+      groupId?: unknown;
       subjectId: unknown;
       practiceDate?: Date;
       createdAt: Date;
@@ -207,6 +206,7 @@ export async function GET(request: Request) {
       return {
         ...base,
         practiceDate,
+        groupName: q.scope === "group" ? groupNames.get(String(q.groupId)) : undefined,
         subjectName: subject?.name ?? "",
         trackLabel,
         ...fields,

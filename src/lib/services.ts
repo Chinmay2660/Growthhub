@@ -6,13 +6,13 @@ import Topic from "@/models/Topic";
 import TopicProgress from "@/models/TopicProgress";
 import QuestionProgress from "@/models/QuestionProgress";
 import PracticeQuestion from "@/models/PracticeQuestion";
-import PrepTask from "@/models/PrepTask";
 import MockInterview from "@/models/MockInterview";
 import MockInterviewSession from "@/models/MockInterviewSession";
 import MockInterviewSlot from "@/models/MockInterviewSlot";
 import MockInterviewRound from "@/models/MockInterviewRound";
 import StudySession from "@/models/StudySession";
 import PreparationPlan from "@/models/PreparationPlan";
+import GroupNote from "@/models/GroupNote";
 import type { GroupRole } from "@/types";
 import { canManageGroup } from "@/lib/group-roles";
 import { generateJoinCode } from "@/lib/auth";
@@ -54,7 +54,6 @@ type GroupStatsContext = {
     confidence?: string;
   }[];
   mocks: { userId: mongoose.Types.ObjectId; score: number }[];
-  taskStats: { _id: mongoose.Types.ObjectId; total: number; completed: number }[];
   group: { interviewDate?: Date } | null;
   questions: {
     _id: mongoose.Types.ObjectId;
@@ -78,33 +77,23 @@ async function loadGroupStatsContext(
   if (memberIds.length === 0) return null;
 
   const objectIds = memberIds.map((id) => new mongoose.Types.ObjectId(id));
-  const groupObjectId = new mongoose.Types.ObjectId(groupId);
 
   const topics = await Topic.find({ groupId }).lean();
   const topicIds = topics.map((t) => t._id);
-  const questions = await PracticeQuestion.find({ groupId, scope: "group" }).lean();
+  // Questions of archived (inactive) tracks are not part of anyone's progress or the leaderboard.
+  const activeSubjects = await Subject.find({ groupId, scope: "group", isActive: true }).select("_id").lean();
+  const activeSubjectIds = new Set(activeSubjects.map((s) => String(s._id)));
+  const questions = (await PracticeQuestion.find({ groupId, scope: "group" }).lean()).filter((q) =>
+    activeSubjectIds.has(String(q.subjectId))
+  );
   const questionIds = questions.map((q) => q._id);
 
-  const [users, topicProgress, mocks, taskStats, group, questionProgress] = await Promise.all([
+  const [users, topicProgress, mocks, group, questionProgress] = await Promise.all([
     User.find({ _id: { $in: objectIds } }).lean(),
     topicIds.length > 0
       ? TopicProgress.find({ userId: { $in: objectIds }, topicId: { $in: topicIds } }).lean()
       : Promise.resolve([]),
     MockInterview.find({ userId: { $in: objectIds }, groupId }).lean(),
-    PrepTask.aggregate<{
-      _id: mongoose.Types.ObjectId;
-      total: number;
-      completed: number;
-    }>([
-      { $match: { userId: { $in: objectIds }, groupId: groupObjectId } },
-      {
-        $group: {
-          _id: "$userId",
-          total: { $sum: 1 },
-          completed: { $sum: { $cond: [{ $eq: ["$status", "completed"] }, 1, 0] } },
-        },
-      },
-    ]),
     Group.findById(groupId).lean(),
     questionIds.length > 0
       ? QuestionProgress.find({
@@ -119,32 +108,26 @@ async function loadGroupStatsContext(
     users,
     topicProgress,
     mocks,
-    taskStats,
     group,
     questions,
     questionProgress,
   };
 }
 
-function memberStatsFromContext(
+function memberStatsFrom(
   memberIds: string[],
   roleMap: Map<string, GroupRole> | undefined,
-  ctx: GroupStatsContext
+  ctx: GroupStatsContext,
+  gamification: GroupGamification
 ): MemberStat[] {
   const userMap = new Map(ctx.users.map((u) => [String(u._id), u]));
-  const taskStatsMap = new Map(ctx.taskStats.map((t) => [String(t._id), t]));
-
-  return memberIds.map((userId) => {
-    const user = userMap.get(userId);
-    const stats = taskStatsMap.get(userId);
-
-    return {
-      userId,
-      name: user?.name ?? "Unknown",
-      tasksCompleted: stats?.completed ?? 0,
-      role: roleMap?.get(userId),
-    };
-  });
+  const solved = new Map(gamification.leaderboard.map((m) => [m.userId, m.totalPoints]));
+  return memberIds.map((userId) => ({
+    userId,
+    name: userMap.get(userId)?.name ?? "Unknown",
+    questionsSolved: solved.get(userId) ?? 0,
+    role: roleMap?.get(userId),
+  }));
 }
 
 function gamificationFromContext(memberIds: string[], ctx: GroupStatsContext): GroupGamification {
@@ -237,119 +220,6 @@ async function ensurePersonalSubjectForGroupSubject(
   return created._id;
 }
 
-function questionTaskTitle(content: string): string {
-  const line = content.split("\n")[0];
-  const preview = line.length > 80 ? `${line.slice(0, 80)}…` : line;
-  return `Practice: ${preview}`;
-}
-
-type QuestionTodoSource = {
-  _id: mongoose.Types.ObjectId;
-  groupId: mongoose.Types.ObjectId;
-  subjectId: mongoose.Types.ObjectId;
-  topicId?: mongoose.Types.ObjectId;
-  content: string;
-  link?: string;
-};
-
-/** The upsert that creates (or refreshes) the to-do task for a question marked "add to todo". */
-function todoTaskUpsert(userId: mongoose.Types.ObjectId, question: QuestionTodoSource) {
-  return {
-    filter: { userId, questionId: question._id },
-    update: {
-      $setOnInsert: {
-        groupId: question.groupId,
-        userId,
-        questionId: question._id,
-        priority: "medium" as const,
-        estimatedMinutes: 30,
-        status: "pending" as const,
-      },
-      $set: {
-        title: questionTaskTitle(question.content),
-        subjectId: question.subjectId,
-        topicId: question.topicId,
-        description: question.link?.trim() || undefined,
-      },
-    },
-  };
-}
-
-export async function syncQuestionTodoTask(
-  userId: string,
-  question: QuestionTodoSource,
-  status: "not_started" | "add_to_todo" | "in_progress" | "revised" | "done"
-) {
-  const uid = new mongoose.Types.ObjectId(userId);
-
-  if (status === "add_to_todo") {
-    const { filter, update } = todoTaskUpsert(uid, question);
-    await PrepTask.findOneAndUpdate(filter, update, { upsert: true });
-    return;
-  }
-
-  await PrepTask.deleteOne({ userId: uid, questionId: question._id });
-}
-
-/**
- * Makes sure every "add to todo" question has a task. Runs on each tasks-page load, so it
- * only reads the questions it needs and writes only the tasks that are missing or stale.
- */
-export async function ensureQuestionTodoTasks(userId: string, groupId: string) {
-  const gid = new mongoose.Types.ObjectId(groupId);
-  const uid = new mongoose.Types.ObjectId(userId);
-
-  const [progress, personalQuestions] = await Promise.all([
-    QuestionProgress.find({ userId: uid, status: "add_to_todo" }).select("questionId").lean(),
-    PracticeQuestion.find({
-      userId: uid,
-      groupId: gid,
-      scope: "personal",
-      status: "add_to_todo",
-      ...NATIVE_PERSONAL_QUESTION_FILTER,
-    })
-      .select("_id groupId subjectId topicId content link")
-      .lean(),
-  ]);
-
-  const groupQuestions =
-    progress.length > 0
-      ? await PracticeQuestion.find({
-          _id: { $in: progress.map((p) => p.questionId) },
-          groupId: gid,
-          scope: "group",
-        })
-          .select("_id groupId subjectId topicId content link")
-          .lean()
-      : [];
-
-  const sources: QuestionTodoSource[] = [...groupQuestions, ...personalQuestions];
-  if (sources.length === 0) return;
-
-  const existing = await PrepTask.find({ userId: uid, questionId: { $in: sources.map((q) => q._id) } })
-    .select("questionId title subjectId description")
-    .lean();
-  const existingByQuestion = new Map(existing.map((t) => [String(t.questionId), t]));
-
-  const ops = sources
-    .filter((q) => {
-      const task = existingByQuestion.get(String(q._id));
-      if (!task) return true;
-      // Re-sync only when the question changed since the task was created.
-      return (
-        task.title !== questionTaskTitle(q.content) ||
-        String(task.subjectId ?? "") !== String(q.subjectId) ||
-        (task.description ?? "") !== (q.link?.trim() ?? "")
-      );
-    })
-    .map((q) => {
-      const { filter, update } = todoTaskUpsert(uid, q);
-      return { updateOne: { filter, update, upsert: true } };
-    });
-
-  if (ops.length > 0) await PrepTask.bulkWrite(ops, { ordered: false });
-}
-
 export async function syncGroupProgressToPersonal(
   userId: string,
   groupQuestion: {
@@ -363,13 +233,13 @@ export async function syncGroupProgressToPersonal(
     difficulty: "easy" | "medium" | "hard";
   },
   progress: {
-    status: "not_started" | "add_to_todo" | "in_progress" | "revised" | "done";
+    status: "not_started" | "in_progress" | "revised" | "done";
     confidence: "weak" | "okay" | "strong";
     lastPracticed?: Date;
     notes?: string;
   }
 ) {
-  if (progress.status === "not_started" || progress.status === "add_to_todo") return;
+  if (progress.status === "not_started") return;
 
   const personalSubjectId = await ensurePersonalSubjectForGroupSubject(
     userId,
@@ -487,17 +357,17 @@ export async function deleteGroupData(groupId: string) {
     topicIds.length > 0
       ? TopicProgress.deleteMany({ topicId: { $in: topicIds } })
       : Promise.resolve(),
-    PrepTask.deleteMany({ groupId: gid }),
     MockInterview.deleteMany({ groupId: gid }),
     MockInterviewSession.deleteMany({ groupId: gid }),
     MockInterviewSlot.deleteMany({ groupId: gid }),
     MockInterviewRound.deleteMany({ groupId: gid }),
+    GroupNote.deleteMany({ groupId: gid }),
     StudySession.deleteMany({ groupId: gid }),
     PreparationPlan.deleteMany({ groupId: gid }),
   ]);
 }
 
-/** Removes a track and its questions, topics, tasks, and related progress. */
+/** Removes a track and its questions, topics, and related progress. */
 export async function deleteSubjectData(subjectId: string) {
   const sid = new mongoose.Types.ObjectId(subjectId);
   const [questionIds, topicIds] = await Promise.all([
@@ -522,12 +392,6 @@ export async function deleteSubjectData(subjectId: string) {
       ? TopicProgress.deleteMany({ topicId: { $in: topicIds } })
       : Promise.resolve(),
     Topic.deleteMany({ subjectId: sid }),
-    PrepTask.deleteMany({
-      $or: [
-        { subjectId: sid },
-        ...(questionIds.length > 0 ? [{ questionId: { $in: questionIds } }] : []),
-      ],
-    }),
     MockInterview.deleteMany({ subjectId: sid }),
     MockInterviewSession.deleteMany({ "questions.subjectId": sid }),
     StudySession.deleteMany({ subjectId: sid }),
@@ -536,17 +400,47 @@ export async function deleteSubjectData(subjectId: string) {
   ]);
 }
 
+/**
+ * Called after a group is deleted: everyone who had it active is moved to another group they still
+ * belong to (the newest one), or has the setting cleared when they have none.
+ */
 export async function clearActiveGroupForMembers(groupId: string) {
-  await User.updateMany(
-    { activeGroupId: new mongoose.Types.ObjectId(groupId) },
-    { $unset: { activeGroupId: 1 } }
-  );
+  const gid = new mongoose.Types.ObjectId(groupId);
+  const affected = await User.find({ activeGroupId: gid }).select("_id").lean();
+  for (const u of affected) {
+    const fallback = await Group.findOne({ "members.userId": u._id, _id: { $ne: gid } })
+      .sort({ createdAt: -1 })
+      .select("_id")
+      .lean();
+    await User.updateOne({ _id: u._id }, fallback ? { activeGroupId: fallback._id } : { $unset: { activeGroupId: 1 } });
+  }
+}
+
+/**
+ * The user's active group, verified. If it is unset, deleted, or they have left it, they are moved
+ * to another group they belong to (and that is saved), or null when they are in none.
+ */
+export async function resolveActiveGroupId(
+  userId: string,
+  activeGroupId?: mongoose.Types.ObjectId | string | null
+): Promise<string | null> {
+  const uid = new mongoose.Types.ObjectId(userId);
+  if (activeGroupId && (await Group.exists({ _id: activeGroupId, "members.userId": uid }))) {
+    return String(activeGroupId);
+  }
+  const fallback = await Group.findOne({ "members.userId": uid }).sort({ createdAt: -1 }).select("_id").lean();
+  if (fallback) {
+    await User.updateOne({ _id: uid }, { activeGroupId: fallback._id });
+    return String(fallback._id);
+  }
+  if (activeGroupId) await User.updateOne({ _id: uid }, { $unset: { activeGroupId: 1 } });
+  return null;
 }
 
 export interface MemberStat {
   userId: string;
   name: string;
-  tasksCompleted: number;
+  questionsSolved: number;
   role?: GroupRole;
 }
 
@@ -560,9 +454,10 @@ export async function getGroupInsights(
     if (!ctx) {
       return { memberStats: [], gamification: buildGroupGamification([]) };
     }
+    const gamification = gamificationFromContext(memberIds, ctx);
     return {
-      memberStats: memberStatsFromContext(memberIds, roleMap, ctx),
-      gamification: gamificationFromContext(memberIds, ctx),
+      memberStats: memberStatsFrom(memberIds, roleMap, ctx, gamification),
+      gamification,
     };
   });
 }
@@ -574,7 +469,7 @@ export async function getMemberStatsBatch(
 ): Promise<MemberStat[]> {
   const ctx = await loadGroupStatsContext(groupId, memberIds);
   if (!ctx) return [];
-  return memberStatsFromContext(memberIds, roleMap, ctx);
+  return memberStatsFrom(memberIds, roleMap, ctx, gamificationFromContext(memberIds, ctx));
 }
 
 export async function getGroupGamificationStats(
@@ -673,20 +568,21 @@ function mapTodayQuestion(
 
 export async function getTodayQuestionsForUser(
   userId: string,
-  groupId: string
+  groupIdOrIds: string | string[]
 ): Promise<{ group: TodayQuestion[]; personal: TodayQuestion[] }> {
+  const groupIds = Array.isArray(groupIdOrIds) ? groupIdOrIds : [groupIdOrIds];
   const range = questionDatePeriodRange("today");
   if (!range) return { group: [], personal: [] };
 
   const dateFilter = { practiceDate: { $gte: range.start, $lt: range.end } };
 
   const [groupQuestions, personalQuestions, subjects] = await Promise.all([
-    PracticeQuestion.find({ groupId, scope: "group", ...dateFilter })
+    PracticeQuestion.find({ groupId: { $in: groupIds }, scope: "group", ...dateFilter })
       .sort({ practiceDate: -1, createdAt: -1 })
       .lean(),
+    // Personal questions belong to the person, not to whichever group they were added under.
     PracticeQuestion.find({
       userId,
-      groupId,
       scope: "personal",
       ...NATIVE_PERSONAL_QUESTION_FILTER,
       ...dateFilter,
@@ -695,12 +591,15 @@ export async function getTodayQuestionsForUser(
       .lean(),
     Subject.find({
       $or: [
-        { groupId, scope: "group", isActive: true },
+        { groupId: { $in: groupIds }, scope: "group", isActive: true },
         { userId, scope: "personal", isActive: true },
       ],
     }).lean(),
   ]);
 
+  const groupNames = new Map(
+    (await Group.find({ _id: { $in: groupIds } }).select("_id name").lean()).map((g) => [String(g._id), g.name])
+  );
   const questionIds = [
     ...groupQuestions.map((q) => q._id),
     ...personalQuestions.map((q) => q._id),
@@ -722,7 +621,11 @@ export async function getTodayQuestionsForUser(
   return {
     group: groupQuestions
       .filter((q) => activeSubjectIds.has(String(q.subjectId)))
-      .map((q) => mapTodayQuestion({ ...q, scope: "group" }, subjectMap, progressMap)),
+      .map((q) => ({
+        ...mapTodayQuestion({ ...q, scope: "group" }, subjectMap, progressMap),
+        groupId: String(q.groupId),
+        groupName: groupNames.get(String(q.groupId)),
+      })),
     personal: personalQuestions
       .filter((q) => activeSubjectIds.has(String(q.subjectId)))
       .map((q) =>
@@ -731,23 +634,28 @@ export async function getTodayQuestionsForUser(
   };
 }
 
+/** Counts today as a study day (called whenever a question is practised or solved). */
 export async function updateStudyStreak(userId: string) {
-  const user = await User.findById(userId);
+  const user = await User.findById(userId).select("studyStreak lastStudyDate").lean();
   if (!user) return;
 
   const today = startOfDay(new Date());
-  const lastStudy = user.lastStudyDate ? startOfDay(user.lastStudyDate) : null;
-
-  if (!lastStudy) {
-    user.studyStreak = 1;
-  } else {
-    const diffDays = (today.getTime() - lastStudy.getTime()) / 86400000;
-    if (diffDays === 0) return; // already studied today
-    user.studyStreak = diffDays === 1 ? user.studyStreak + 1 : 1;
+  const last = user.lastStudyDate ? startOfDay(new Date(user.lastStudyDate)) : null;
+  let next = 1;
+  if (last) {
+    const gap = Math.round((today.getTime() - last.getTime()) / 86400000);
+    if (gap <= 0) return; // already counted today
+    next = gap === 1 ? (user.studyStreak ?? 0) + 1 : 1;
   }
 
-  user.lastStudyDate = new Date();
-  await user.save();
+  // Conditional write: two requests landing together must not both extend the streak.
+  await User.updateOne(
+    {
+      _id: userId,
+      $or: [{ lastStudyDate: { $exists: false } }, { lastStudyDate: null }, { lastStudyDate: { $lt: today } }],
+    },
+    { studyStreak: next, lastStudyDate: new Date() }
+  );
 }
 
 export { serializeDoc };

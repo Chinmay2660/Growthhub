@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
-import Link from "next/link";
+import { useDocumentTitle } from "@/lib/use-document-title";
+import { useEffect, useState, useCallback } from "react";
 import { useUser } from "@/components/providers/UserProvider";
 import { apiGet, apiPatch, getErrorMessage } from "@/lib/api";
-import TablePagination from "@/components/ui/TablePagination";
-import { normalizeQuestionStatus, sliceTablePage, TABLE_PAGE_SIZE } from "@/lib/utils";
+import { normalizeQuestionStatus } from "@/lib/utils";
 import toast from "react-hot-toast";
 import {
   triggerQuestionPointsBurst,
@@ -16,7 +15,10 @@ import dynamic from "next/dynamic";
 
 const NotesInbox = dynamic(() => import("@/components/groups/NotesInbox"), { ssr: false });
 import TodayPlanCard from "@/components/dashboard/TodayPlanCard";
-import Card, { CardHeader } from "@/components/ui/Card";
+import TodayHero from "@/components/dashboard/TodayHero";
+import OverdueCard from "@/components/dashboard/OverdueCard";
+import GroupPulse from "@/components/dashboard/GroupPulse";
+import NextMockCard from "@/components/dashboard/NextMockCard";
 import Button from "@/components/ui/Button";
 import PageHeader from "@/components/ui/PageHeader";
 import { DashboardSkeleton, ErrorState, EmptyState } from "@/components/ui/StateViews";
@@ -24,18 +26,14 @@ import type { DashboardData, QuestionStatus } from "@/types";
 
 export default function DashboardPage() {
   const { user, refreshUser } = useUser();
+  useDocumentTitle("Dashboard");
   const [data, setData] = useState<DashboardData | null>(null);
   const [initialLoad, setInitialLoad] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [pointBurst, setPointBurst] = useState<QuestionPointBurst | null>(null);
-  const [memberPage, setMemberPage] = useState(1);
 
   const activeGroupId = user?.activeGroupId;
-  const memberPageItems = useMemo(
-    () => sliceTablePage(data?.memberStats ?? [], memberPage, TABLE_PAGE_SIZE),
-    [data?.memberStats, memberPage]
-  );
 
   const load = useCallback(async (silent = false) => {
     if (!user?._id) return;
@@ -110,9 +108,8 @@ export default function DashboardPage() {
         };
       });
       triggerQuestionPointsBurst(setPointBurst, id, updated.pointsEarnedNow);
-      if (normalized === "add_to_todo") {
-        toast.success("Added to Tasks");
-      }
+      // The goal ring and streak come from the server, so refresh them quietly after a solve.
+      if (updated.pointsEarnedNow) void load(true);
     } catch (err) {
       setData((prev) => {
         if (!prev) return prev;
@@ -142,9 +139,7 @@ export default function DashboardPage() {
           title="No active group"
           description="Create a prep group or join one with an invite code to track progress together."
           action={
-            <Link href="/groups">
-              <Button>Browse Groups</Button>
-            </Link>
+            <Button href="/groups">Browse Groups</Button>
           }
         />
       </div>
@@ -157,62 +152,27 @@ export default function DashboardPage() {
     <div className={refreshing ? "space-y-6 opacity-80 transition-opacity" : "space-y-6"}>
       <PageHeader
         title={`Welcome back, ${user?.name?.split(" ")[0]}`}
-        description="Here's where you stand today."
+        description="Your day at a glance."
       />
 
-      <Card>
-        <CardHeader
-          title="Group Progress"
-          action={
-            <Link href={user?.activeGroupId ? `/groups/${user.activeGroupId}` : "/groups"}>
-              <Button variant="ghost" size="sm">View Group</Button>
-            </Link>
-          }
-        />
-        {data.memberStats && data.memberStats.length > 0 ? (
-          <>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="table-head">
-                  <th className="pb-2 font-medium">Member</th>
-                  <th className="pb-2 font-medium">Tasks Done</th>
-                </tr>
-              </thead>
-              <tbody>
-                {memberPageItems.map((m) => (
-                  <tr key={m.userId} className="table-row">
-                    <td className="py-2 font-medium">
-                      <Link href={`/users/${m.userId}`} className="text-brand hover:underline">
-                        {m.name}
-                      </Link>
-                    </td>
-                    <td className="py-2">{m.tasksCompleted}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="mt-4">
-            <TablePagination
-              page={memberPage}
-              total={data.memberStats.length}
-              onPageChange={setMemberPage}
-            />
-          </div>
-          </>
-        ) : (
-          <p className="text-sm text-[var(--muted)]">No group members yet.</p>
-        )}
-      </Card>
+      <TodayHero data={data} firstName={user?.name?.split(" ")[0]} />
 
-      <NotesInbox groupId={user!.activeGroupId!} compact />
+      <OverdueCard overdue={data.overdue} />
 
       <TodayPlanCard
         todayQuestions={data.todayQuestions}
         onStatusChange={updateQuestionStatus}
         pointBurst={pointBurst}
       />
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <GroupPulse groupId={user!.activeGroupId!} />
+        </div>
+        <NextMockCard nextMock={data.nextMock} groupId={user!.activeGroupId!} />
+      </div>
+
+      <NotesInbox groupId={user!.activeGroupId!} compact />
 
       <InspirationCard
         studyStreak={data.studyStreak}

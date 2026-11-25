@@ -13,12 +13,46 @@ export function getErrorMessage(err: unknown, fallback = "Something went wrong")
   return fallback;
 }
 
+/** Fired when the server says the session is gone, so the app can sign the person out instead of showing "Unauthorized". */
+export const UNAUTHORIZED_EVENT = "growthhub:unauthorized";
+
+/** A request that hasn't answered in this long is given up on (the offline cache or queue takes over where it can). */
+const REQUEST_TIMEOUT_MS = 20_000;
+
 async function handle<T>(res: Response): Promise<T> {
   const body = await res.json().catch(() => ({}));
+  if (res.status === 401 && typeof window !== "undefined") {
+    // The sign-in screens themselves answer 401 for a wrong code; only react to a lost session elsewhere.
+    let path = "";
+    try {
+      path = new URL(res.url).pathname;
+    } catch {
+      /* relative or opaque URL: treat as an ordinary 401 */
+    }
+    if (!path.startsWith("/api/auth/")) window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
+  }
+  if (res.status === 429) {
+    const wait = Number(res.headers.get("Retry-After"));
+    throw new ApiError(
+      wait > 0 ? `Too many requests. Try again in ${wait} second${wait === 1 ? "" : "s"}.` : "Too many requests. Try again shortly.",
+      429
+    );
+  }
   if (!res.ok || body.success === false) {
     throw new ApiError(body.error || `Request failed with status ${res.status}`, res.status);
   }
   return body.data as T;
+}
+
+/** fetch with a timeout, so a stalled connection ends in an error instead of a spinner that never stops. */
+async function timedFetch(url: string, init: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 const fetchOpts = { credentials: "include" as RequestCredentials };
@@ -36,10 +70,7 @@ const CACHEABLE = [
   "/api/analytics",
   "/api/subjects",
   "/api/topics",
-  "/api/tasks",
   "/api/practice-questions",
-  "/api/study-sessions",
-  "/api/preparation-plan",
   "/api/prep-insights",
   "/api/groups",
   "/api/group-notes",
@@ -53,9 +84,7 @@ const CACHEABLE = [
 const QUEUEABLE = [
   "/api/subjects",
   "/api/topics",
-  "/api/tasks",
   "/api/practice-questions",
-  "/api/study-sessions",
   "/api/group-notes",
 ];
 
@@ -128,7 +157,11 @@ export type GetOptions<T> = {
 };
 
 function isNetworkError(err: unknown): boolean {
-  return err instanceof TypeError || (typeof navigator !== "undefined" && navigator.onLine === false);
+  return (
+    err instanceof TypeError ||
+    (err instanceof DOMException && err.name === "AbortError") ||
+    (typeof navigator !== "undefined" && navigator.onLine === false)
+  );
 }
 
 /** Stale-while-revalidate: cached copy first (via onCached), then always the fresh response. */
@@ -138,7 +171,7 @@ export async function apiGet<T>(url: string, opts?: GetOptions<T>): Promise<T> {
     if (cached !== undefined) opts.onCached(cached);
   }
   try {
-    const res = await fetch(url, { ...fetchOpts, cache: "no-store" });
+    const res = await timedFetch(url, { ...fetchOpts, cache: "no-store" });
     const data = await handle<T>(res);
     void writeCache(url, data);
     return data;
@@ -147,6 +180,9 @@ export async function apiGet<T>(url: string, opts?: GetOptions<T>): Promise<T> {
     if (isNetworkError(err)) {
       const cached = await readCache<T>(url);
       if (cached !== undefined) return cached;
+      if (err instanceof DOMException && err.name === "AbortError") {
+        throw new ApiError("The request timed out. Check your connection and try again.");
+      }
     }
     throw err;
   }
@@ -222,7 +258,7 @@ type Method = OutboxItem["method"];
 
 async function send<T>(method: Method, url: string, payload: unknown, idempotencyKey: string): Promise<T> {
   const hasBody = payload !== undefined;
-  const res = await fetch(url, {
+  const res = await timedFetch(url, {
     ...fetchOpts,
     method,
     headers: {

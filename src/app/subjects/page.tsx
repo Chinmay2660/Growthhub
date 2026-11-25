@@ -1,6 +1,8 @@
 "use client";
 
+import { useDocumentTitle } from "@/lib/use-document-title";
 import { useEffect, useState, useCallback } from "react";
+import Checkbox from "@/components/ui/Checkbox";
 import { useUser } from "@/components/providers/UserProvider";
 import { apiGet, apiPost, apiPatch, apiDelete, getErrorMessage } from "@/lib/api";
 import { canManageGroup } from "@/lib/group-roles";
@@ -9,6 +11,9 @@ import Chip from "@/components/ui/Chip";
 import Button from "@/components/ui/Button";
 import IconButton from "@/components/ui/IconButton";
 import Modal from "@/components/ui/Modal";
+import ModalFooter from "@/components/ui/ModalFooter";
+import FormField from "@/components/ui/FormField";
+import { Input } from "@/components/ui/Input";
 import Switch from "@/components/ui/Switch";
 import { Loader2, Pencil, Trash2 } from "lucide-react";
 import { SubjectsGridSkeleton, SubjectsPageSkeleton, ErrorState, EmptyState } from "@/components/ui/StateViews";
@@ -21,6 +26,7 @@ import type { ContentScope, GroupRole, SubjectWithStats } from "@/types";
 
 export default function SubjectsPage() {
   const { user } = useUser();
+  useDocumentTitle("Tracks");
   const confirm = useConfirm();
   const [subjects, setSubjects] = useState<SubjectWithStats[]>([]);
   const [loading, setLoading] = useState(true);
@@ -65,6 +71,7 @@ export default function SubjectsPage() {
         ]);
         setSubjects(data);
         setCanManageGroupTracks(canManageGroup(groupHeader.myRole));
+        setError("");
       } else {
         const data = await apiGet<SubjectWithStats[]>(url, {
           onCached: (c) => {
@@ -74,9 +81,10 @@ export default function SubjectsPage() {
         });
         setSubjects(data);
         setCanManageGroupTracks(false);
+        setError("");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load subjects");
+      setError(err instanceof Error ? err.message : "Failed to load tracks");
     } finally {
       setLoading(false);
       setInitialLoad(false);
@@ -127,7 +135,7 @@ export default function SubjectsPage() {
       closeModal();
       load();
     } catch (err) {
-      toast.error(getErrorMessage(err, "Failed to create subject"));
+      toast.error(getErrorMessage(err, "Failed to create track"));
     } finally {
       setSaving(false);
     }
@@ -270,9 +278,14 @@ export default function SubjectsPage() {
               : "Your private tracks for solo practice."}
           </p>
         </div>
-        <Button size="sm" onClick={openCreateModal}>
-          Add {tab === "group" ? "Group" : "Personal"} Track
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button href="/topics" size="sm" variant="outline">
+            Topics
+          </Button>
+          <Button size="sm" onClick={openCreateModal}>
+            Add {tab === "group" ? "Group" : "Personal"} Track
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -372,28 +385,23 @@ export default function SubjectsPage() {
         }
       >
         <div className="space-y-4">
-          <div>
-            <label className="text-sm font-medium">Track name</label>
-            <input
+          <FormField label="Track name">
+            <Input
               type="text"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="Track name"
-              className="mt-1 w-full rounded-lg border border-[var(--input-border)] px-4 py-2.5 text-sm dark:border-[var(--input-border)] dark:bg-[var(--input-bg)]"
             />
-          </div>
-          <div>
-            <label className="text-sm font-medium">Target count</label>
-            <input
+          </FormField>
+          <FormField label="Target count">
+            <Input
               type="number"
               min={0}
               value={newTotalQuestions}
               onChange={(e) => setNewTotalQuestions(e.target.value)}
-              onWheel={(e) => e.currentTarget.blur()}
               placeholder="Target count (optional)"
-              className="mt-1 w-full rounded-lg border border-[var(--input-border)] px-4 py-2.5 text-sm dark:border-[var(--input-border)] dark:bg-[var(--input-bg)]"
             />
-          </div>
+          </FormField>
           <div className="flex items-center justify-between gap-4 rounded-lg border border-[var(--border)] p-3 text-sm">
             <div className="min-w-0">
               <p className="font-medium text-[var(--foreground)]">Track enabled</p>
@@ -410,12 +418,12 @@ export default function SubjectsPage() {
           </div>
           {tab === "group" && (
             <label className="flex items-start gap-3 rounded-lg border border-[var(--border)] p-3 text-sm">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={useForMockInterview}
-                onChange={(e) => setUseForMockInterview(e.target.checked)}
+                onChange={() => setUseForMockInterview(!useForMockInterview)}
                 className="mt-0.5"
                 disabled={!trackEnabled}
+                aria-label="Use for mock interviews"
               />
               <span>
                 <span className="font-medium text-[var(--foreground)]">Use for mock interviews</span>
@@ -425,37 +433,35 @@ export default function SubjectsPage() {
               </span>
             </label>
           )}
-          <div className="flex items-center justify-between gap-2 border-t border-[var(--border)] pt-4">
-            {editingSubject && canDeleteTrack ? (
-              <IconButton
-                label="Delete track"
-                variant="danger"
-                disabled={saving || deletingId === editingSubject._id}
-                onClick={() => deleteTrack(editingSubject)}
-              >
-                {deletingId === editingSubject._id ? (
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                ) : (
-                  <Trash2 className="h-4 w-4" strokeWidth={2} aria-hidden />
-                )}
-              </IconButton>
-            ) : (
-              <span aria-hidden />
-            )}
-            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-              <Button variant="outline" size="sm" onClick={closeModal} disabled={saving}>
-                Cancel
-              </Button>
-              <Button
-                size="sm"
-                onClick={editingSubject ? saveSubject : createSubject}
-                loading={saving}
-                disabled={!newName.trim()}
-              >
-                {saving ? "Saving…" : editingSubject ? "Save changes" : "Save track"}
-              </Button>
-            </div>
-          </div>
+          <ModalFooter
+            className="!mt-4"
+            onCancel={closeModal}
+            cancelDisabled={saving}
+            start={
+              editingSubject && canDeleteTrack ? (
+                <IconButton
+                  label="Delete track"
+                  variant="danger"
+                  disabled={saving || deletingId === editingSubject._id}
+                  onClick={() => deleteTrack(editingSubject)}
+                >
+                  {deletingId === editingSubject._id ? (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  ) : (
+                    <Trash2 className="h-4 w-4" strokeWidth={2} aria-hidden />
+                  )}
+                </IconButton>
+              ) : undefined
+            }
+          >
+            <Button
+              onClick={editingSubject ? saveSubject : createSubject}
+              loading={saving}
+              disabled={!newName.trim()}
+            >
+              {saving ? "Saving…" : editingSubject ? "Save changes" : "Save track"}
+            </Button>
+          </ModalFooter>
         </div>
       </Modal>
     </div>

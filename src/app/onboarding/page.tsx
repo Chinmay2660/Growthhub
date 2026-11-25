@@ -1,16 +1,20 @@
 "use client";
 
 import { useState } from "react";
+import Slider from "@/components/ui/Slider";
+import DatePicker from "@/components/ui/DatePicker";
+import { Input } from "@/components/ui/Input";
 import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
+import Chip from "@/components/ui/Chip";
 import AppLogo from "@/components/ui/AppLogo";
 import { apiPost, getErrorMessage } from "@/lib/api";
 import { useUser } from "@/components/providers/UserProvider";
 import toast from "react-hot-toast";
 import type { User, Group } from "@/types";
 
-const STEPS = ["Welcome", "Target", "Subjects", "Study Time", "Group"];
+const STEPS = ["Welcome", "Target", "Tracks", "Study Time", "Group"];
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -33,7 +37,7 @@ export default function OnboardingPage() {
     const trimmed = newSubject.trim();
     if (!trimmed) return;
     if (subjects.some((s) => s.toLowerCase() === trimmed.toLowerCase())) {
-      toast.error("Subject already added");
+      toast.error("Track already added");
       return;
     }
     setSubjects((prev) => [...prev, trimmed]);
@@ -93,39 +97,46 @@ export default function OnboardingPage() {
             <div
               key={s}
               className={`h-1.5 w-10 rounded-full transition-colors ${
-                i <= step ? "bg-brand" : "bg-stone-200 bg-stone-700"
+                i <= step ? "bg-brand" : "bg-stone-200 dark:bg-stone-700"
               }`}
             />
           ))}
         </div>
 
         <Card>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!canNext() || loading) return;
+              if (step < STEPS.length - 1) setStep((s) => s + 1);
+              else void handleFinish();
+            }}
+          >
           {step === 0 && (
             <div className="space-y-4">
               <h2 className="text-lg font-semibold">What&apos;s your name?</h2>
-              <input
+              <label htmlFor="ob-name" className="sr-only">Your name</label>
+              <Input
+                id="ob-name"
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Your name"
-                className="w-full rounded-lg border border-[var(--input-border)] px-4 py-2.5 text-sm dark:border-[var(--input-border)] dark:bg-[var(--input-bg)]"
                 autoFocus
               />
               <div>
-                <label className="text-sm font-medium text-[var(--foreground)]">Preparation level</label>
-                <div className="mt-2 flex gap-2">
+                <span id="ob-level-label" className="text-sm font-medium text-[var(--foreground)]">Preparation level</span>
+                <div className="mt-2 flex gap-2" role="group" aria-labelledby="ob-level-label">
                   {(["beginner", "intermediate", "advanced"] as const).map((level) => (
-                    <button
+                    <Chip
                       key={level}
+                      variant="brand"
+                      active={preparationLevel === level}
                       onClick={() => setPreparationLevel(level)}
-                      className={`flex-1 rounded-lg border px-3 py-2 text-xs font-medium capitalize ${
-                        preparationLevel === level
-                          ? "border-brand bg-brand/10 text-brand"
-                          : "border-[var(--border)] text-[var(--muted)] "
-                      }`}
+                      className="flex-1 justify-center !rounded-lg !px-3 !py-2 capitalize"
                     >
                       {level}
-                    </button>
+                    </Chip>
                   ))}
                 </div>
               </div>
@@ -138,30 +149,32 @@ export default function OnboardingPage() {
               <p className="text-sm text-[var(--muted)]">
                 Your interview date drives the daily plan. All optional, and you can change it later.
               </p>
-              <input
+              <label htmlFor="ob-company" className="sr-only">Target company</label>
+              <Input
+                id="ob-company"
                 type="text"
                 value={targetCompany}
                 onChange={(e) => setTargetCompany(e.target.value)}
                 placeholder="Target company (e.g. Acme Corp)"
-                className="w-full rounded-lg border border-[var(--input-border)] px-4 py-2.5 text-sm dark:bg-[var(--input-bg)]"
               />
-              <input
+              <label htmlFor="ob-role" className="sr-only">Target role</label>
+              <Input
+                id="ob-role"
                 type="text"
                 value={targetRole}
                 onChange={(e) => setTargetRole(e.target.value)}
                 placeholder="Target role (e.g. Backend Engineer)"
-                className="w-full rounded-lg border border-[var(--input-border)] px-4 py-2.5 text-sm dark:bg-[var(--input-bg)]"
               />
               <div>
                 <label className="text-sm font-medium" htmlFor="interview-date">
                   Interview date
                 </label>
-                <input
+                <DatePicker
                   id="interview-date"
-                  type="date"
                   value={interviewDate}
-                  onChange={(e) => setInterviewDate(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-[var(--input-border)] px-4 py-2.5 text-sm dark:bg-[var(--input-bg)]"
+                  onChange={setInterviewDate}
+                  clearable
+                  className="mt-1"
                 />
                 <p className="mt-1 text-xs text-[var(--muted)]">Applies when you create a group. Joining uses the group&apos;s date.</p>
               </div>
@@ -170,16 +183,18 @@ export default function OnboardingPage() {
 
           {step === 2 && (
             <div className="space-y-4">
-              <h2 className="text-lg font-semibold">Which subjects are you preparing?</h2>
-              <p className="text-sm text-[var(--muted)]">Add your own subjects. You can add more later from the Subjects page.</p>
+              <h2 className="text-lg font-semibold">Which tracks are you preparing?</h2>
+              <p className="text-sm text-[var(--muted)]">Add your own tracks. You can add more later from the Tracks page.</p>
               <div className="flex gap-2">
-                <input
+                <label htmlFor="ob-subject" className="sr-only">Track name</label>
+                <Input
+                  id="ob-subject"
                   type="text"
                   value={newSubject}
                   onChange={(e) => setNewSubject(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addSubject())}
                   placeholder="e.g. System Design"
-                  className="flex-1 rounded-lg border border-[var(--input-border)] px-4 py-2.5 text-sm dark:border-[var(--input-border)] dark:bg-[var(--input-bg)]"
+                  className="flex-1"
                 />
                 <Button type="button" variant="outline" onClick={addSubject} disabled={!newSubject.trim()}>
                   Add
@@ -205,7 +220,7 @@ export default function OnboardingPage() {
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-[var(--muted)]">No subjects yet — skip for now or add at least one.</p>
+                <p className="text-sm text-[var(--muted)]">No tracks yet — skip for now or add at least one.</p>
               )}
             </div>
           )}
@@ -213,14 +228,14 @@ export default function OnboardingPage() {
           {step === 3 && (
             <div className="space-y-4">
               <h2 className="text-lg font-semibold">Daily study time available?</h2>
-              <input
-                type="range"
+              <Slider
                 min={30}
                 max={480}
                 step={15}
                 value={dailyStudyMinutes}
-                onChange={(e) => setDailyStudyMinutes(Number(e.target.value))}
-                className="w-full"
+                onChange={setDailyStudyMinutes}
+                aria-label="Daily study minutes"
+                aria-valuetext={`${Math.floor(dailyStudyMinutes / 60)} hours ${dailyStudyMinutes % 60} minutes`}
               />
               <p className="text-center text-2xl font-bold text-brand">
                 {Math.floor(dailyStudyMinutes / 60)}h {dailyStudyMinutes % 60}m
@@ -232,33 +247,39 @@ export default function OnboardingPage() {
             <div className="space-y-4">
               <h2 className="text-lg font-semibold">Create or join a group</h2>
               <div className="flex gap-2">
-                <button
+                <Chip
+                  variant="brand"
+                  active={groupAction === "create"}
                   onClick={() => setGroupAction("create")}
-                  className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${
-                    groupAction === "create" ? "border-brand bg-brand/10 text-brand" : "border-[var(--border)]"
-                  }`}
+                  className="flex-1 justify-center !rounded-lg !px-3 !py-2 !text-sm"
                 >
-                  Create Group
-                </button>
-                <button
+                  Create group
+                </Chip>
+                <Chip
+                  variant="brand"
+                  active={groupAction === "join"}
                   onClick={() => setGroupAction("join")}
-                  className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${
-                    groupAction === "join" ? "border-brand bg-brand/10 text-brand" : "border-[var(--border)]"
-                  }`}
+                  className="flex-1 justify-center !rounded-lg !px-3 !py-2 !text-sm"
                 >
-                  Join Group
-                </button>
+                  Join group
+                </Chip>
               </div>
               {groupAction === "create" ? (
-                <input
+                <>
+                <label htmlFor="ob-group-name" className="sr-only">Group name</label>
+                <Input
+                  id="ob-group-name"
                   type="text"
                   value={groupName}
                   onChange={(e) => setGroupName(e.target.value)}
                   placeholder={`${name}'s Prep Group (optional)`}
-                  className="w-full rounded-lg border border-[var(--input-border)] px-4 py-2.5 text-sm dark:border-[var(--input-border)] dark:bg-[var(--input-bg)]"
                 />
+                </>
               ) : (
-                <input
+                <>
+                <label htmlFor="ob-join-code" className="sr-only">Group join code (6 digits)</label>
+                <Input
+                  id="ob-join-code"
                   type="text"
                   inputMode="numeric"
                   pattern="\d{6}"
@@ -266,14 +287,21 @@ export default function OnboardingPage() {
                   value={joinCode}
                   onChange={(e) => setJoinCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                   placeholder="123456"
-                  className="w-full rounded-lg border border-[var(--input-border)] px-4 py-2.5 text-sm font-mono tracking-widest dark:border-[var(--input-border)] dark:bg-[var(--input-bg)]"
+                  className="font-mono tracking-widest"
                 />
+                {subjects.length > 0 && (
+                  <p className="text-xs text-[var(--muted)]">
+                    Tracks you added will be kept for your personal tracks.
+                  </p>
+                )}
+                </>
               )}
             </div>
           )}
 
           <div className="mt-6 flex justify-between">
             <Button
+              type="button"
               variant="ghost"
               onClick={() => setStep((s) => s - 1)}
               disabled={step === 0}
@@ -281,16 +309,17 @@ export default function OnboardingPage() {
               Back
             </Button>
             {step < STEPS.length - 1 ? (
-              <Button onClick={() => setStep((s) => s + 1)} disabled={!canNext()}>
+              <Button type="submit" disabled={!canNext()}>
                 Continue
               </Button>
             ) : (
-              <Button onClick={handleFinish} loading={loading}
+              <Button type="submit" loading={loading}
                 disabled={!canNext()}>
                 {loading ? "Setting up..." : "Launch Dashboard"}
               </Button>
             )}
           </div>
+          </form>
         </Card>
       </div>
     </div>

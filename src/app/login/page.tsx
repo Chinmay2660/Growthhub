@@ -1,10 +1,13 @@
 "use client";
 
+import { useDocumentTitle } from "@/lib/use-document-title";
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import clsx from "clsx";
-import { Shield, Sparkles, Zap } from "lucide-react";
+import { Check, Copy, KeyRound, Shield, Sparkles, Zap } from "lucide-react";
+import Checkbox from "@/components/ui/Checkbox";
+import Label from "@/components/ui/Label";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import FormField from "@/components/ui/FormField";
@@ -61,6 +64,7 @@ function AuthTabs({
         <button
           key={item.id}
           type="button"
+          aria-pressed={tab === item.id}
           onClick={() => onChange(item.id)}
           className={clsx(
             "flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-all",
@@ -89,6 +93,88 @@ function AuthDivider({ label }: { label: string }) {
   );
 }
 
+function LabeledField({
+  id,
+  label,
+  hint,
+  children,
+}: {
+  id: string;
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1">
+      <Label htmlFor={id}>{label}</Label>
+      {children}
+      {hint && <p className="hint">{hint}</p>}
+    </div>
+  );
+}
+
+/** Shown once after sign-up or a recovery: the plaintext recovery key, which is never shown again. */
+function RecoveryKeyStep({
+  recoveryKey,
+  title,
+  onDone,
+}: {
+  recoveryKey: string;
+  title: string;
+  onDone: () => void;
+}) {
+  const [saved, setSaved] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(recoveryKey);
+      setCopied(true);
+      toast.success("Recovery key copied");
+    } catch {
+      toast.error("Could not copy. Select the key and copy it manually.");
+    }
+  };
+
+  return (
+    <Card padded={false} className="animate-scale-in p-4 sm:p-5">
+      <div className="mb-3 text-center">
+        <div className="mb-2 inline-flex h-9 w-9 items-center justify-center rounded-xl bg-brand/10 text-brand">
+          <KeyRound className="h-4 w-4" aria-hidden />
+        </div>
+        <h2 className="text-lg font-bold text-[var(--foreground)]">{title}</h2>
+        <p className="mt-1 text-xs text-[var(--muted)] sm:text-sm">
+          If you ever forget your 6-digit code, this key is the only way back into your account. It can
+          not be shown again, so keep it somewhere safe, such as a password manager.
+        </p>
+      </div>
+      <div className="rounded-xl border border-brand/30 bg-brand/5 p-4 text-center">
+        <p className="select-all break-all font-mono text-xl font-bold tracking-[0.15em] text-brand">
+          {recoveryKey}
+        </p>
+        <Button type="button" variant="outline" size="sm" className="mt-3" onClick={copy}>
+          {copied ? <Check className="mr-1.5 h-3.5 w-3.5" aria-hidden /> : <Copy className="mr-1.5 h-3.5 w-3.5" aria-hidden />}
+          {copied ? "Copied" : "Copy key"}
+        </Button>
+      </div>
+      <div className="mt-4 flex items-start gap-2.5">
+        <Checkbox
+          checked={saved}
+          onChange={() => setSaved((v) => !v)}
+          aria-label="I have saved my recovery key"
+          className="mt-0.5"
+        />
+        <span className="cursor-pointer text-sm text-[var(--foreground)]" onClick={() => setSaved((v) => !v)}>
+          I&apos;ve saved my recovery key
+        </span>
+      </div>
+      <Button type="button" className="mt-4 w-full" disabled={!saved} onClick={onDone}>
+        Continue
+      </Button>
+    </Card>
+  );
+}
+
 function LoginPanel() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -103,6 +189,11 @@ function LoginPanel() {
   const [registerLoading, setRegisterLoading] = useState(false);
   const [guestLoading, setGuestLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [forgot, setForgot] = useState(false);
+  const [recoveryKeyInput, setRecoveryKeyInput] = useState("");
+  const [newCode, setNewCode] = useState("");
+  const [recoverLoading, setRecoverLoading] = useState(false);
+  const [pendingKey, setPendingKey] = useState<{ key: string; user: User; title: string } | null>(null);
 
   const authError = searchParams.get("error");
 
@@ -147,20 +238,117 @@ function LoginPanel() {
     e.preventDefault();
     setRegisterLoading(true);
     try {
-      const result = await apiPost<{ user: User }>("/api/auth/register", {
+      const result = await apiPost<{ user: User; recoveryKey: string }>("/api/auth/register", {
         username,
         name,
         code,
       });
-      setUser(result.user);
-      toast.success("Account created! Save your 6-digit code.");
-      router.push("/onboarding");
+      toast.success("Account created! Now save your recovery key.");
+      // The user is only put in app state after the key step, so the app does not navigate away early.
+      setPendingKey({ key: result.recoveryKey, user: result.user, title: "Save your recovery key" });
     } catch (err) {
       toast.error(getErrorMessage(err, "Registration failed"));
     } finally {
       setRegisterLoading(false);
     }
   };
+
+  const handleRecover = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRecoverLoading(true);
+    try {
+      const result = await apiPost<{ user: User; recoveryKey: string }>("/api/auth/recover", {
+        username,
+        recoveryKey: recoveryKeyInput,
+        newCode,
+      });
+      toast.success("Your code was reset. Save your new recovery key.");
+      setPendingKey({ key: result.recoveryKey, user: result.user, title: "Save your new recovery key" });
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Recovery failed"));
+    } finally {
+      setRecoverLoading(false);
+    }
+  };
+
+  if (pendingKey) {
+    return (
+      <RecoveryKeyStep
+        recoveryKey={pendingKey.key}
+        title={pendingKey.title}
+        onDone={() => {
+          setUser(pendingKey.user);
+          router.push(getHomePath(pendingKey.user));
+        }}
+      />
+    );
+  }
+
+  if (forgot) {
+    return (
+      <Card padded={false} className="animate-scale-in p-4 sm:p-5">
+        <div className="mb-3 text-center">
+          <h2 className="text-lg font-bold text-[var(--foreground)]">Forgot your code?</h2>
+          <p className="mt-0.5 text-xs text-[var(--muted)] sm:text-sm">
+            Enter your username and the recovery key you saved, then choose a new 6-digit code.
+          </p>
+        </div>
+        <form onSubmit={handleRecover} className="space-y-3">
+          <LabeledField id="rc-username" label="Username">
+            <Input
+              id="rc-username"
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value.toLowerCase())}
+              placeholder="your_username"
+              autoComplete="username"
+              required
+            />
+          </LabeledField>
+          <LabeledField id="rc-key" label="Recovery key" hint="Looks like ABCD-EFGH-JKMN-PQRS">
+            <Input
+              id="rc-key"
+              type="text"
+              value={recoveryKeyInput}
+              onChange={(e) => setRecoveryKeyInput(e.target.value.toUpperCase())}
+              placeholder="ABCD-EFGH-JKMN-PQRS"
+              autoComplete="off"
+              autoCapitalize="characters"
+              spellCheck={false}
+              className="font-mono tracking-wider"
+              required
+            />
+          </LabeledField>
+          <LabeledField id="rc-code" label="New 6-digit code">
+            <Input
+              id="rc-code"
+              type="password"
+              inputMode="numeric"
+              pattern="\d{6}"
+              maxLength={6}
+              value={newCode}
+              onChange={(e) => setNewCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              placeholder="••••••"
+              autoComplete="new-password"
+              className="tracking-widest"
+              required
+            />
+          </LabeledField>
+          <Button
+            type="submit"
+            className="w-full"
+            loading={recoverLoading}
+            disabled={newCode.length !== 6 || !username || !recoveryKeyInput.trim()}
+          >
+            {recoverLoading ? "Resetting..." : "Reset code"}
+          </Button>
+          <Button type="button" variant="ghost" className="w-full" onClick={() => setForgot(false)}>
+            Back to sign in
+          </Button>
+        </form>
+      </Card>
+    );
+  }
 
   return (
     <Card padded={false} className="animate-scale-in p-4 sm:p-5">
@@ -237,6 +425,13 @@ function LoginPanel() {
               disabled={code.length !== 6}>
               {loading ? "Signing in..." : "Sign in with code"}
             </Button>
+            <button
+              type="button"
+              onClick={() => setForgot(true)}
+              className="w-full text-center text-xs font-medium text-[var(--muted)] hover:text-brand"
+            >
+              Forgot your code?
+            </button>
           </form>
 
           <Button
@@ -309,6 +504,7 @@ function LoginPanel() {
 }
 
 export default function LoginPage() {
+  useDocumentTitle("Sign in");
   return (
     <div className="login-shell flex flex-col">
       <header className="flex shrink-0 items-center justify-between px-4 py-3 sm:px-6">

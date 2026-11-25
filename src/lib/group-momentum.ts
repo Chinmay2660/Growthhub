@@ -185,14 +185,29 @@ export type MomentumMember = {
   sentToday: string[];
   /** Only filled in for admins. */
   behindReasons: string[];
+  /** Group questions this member first solved today (IST). */
+  solvedToday: number;
+  /** The member's own daily question goal. */
+  dailyGoal: number;
+  /** Solved at least their daily goal today. */
+  goalMetToday: boolean;
+  /** No solves for a few days. Everyone sees this as a gentle "could use a cheer", never as a ranking. */
+  quiet: boolean;
 };
+
+/** One entry in the recent-activity feed. */
+export type FeedItem = { userId: string; name: string; at: string; title: string };
 
 export type MomentumResponse = {
   isAdmin: boolean;
   unreadNotes: number;
   headline: { title: string; detail: string };
+  /** Latest solved group questions, newest first. */
+  feed: FeedItem[];
   team: {
     memberCount: number;
+    /** Questions each member aims to solve this week (set by an admin). */
+    goalPerMember: number;
     activeMembers: number;
     doneWeek: number;
     goal: number;

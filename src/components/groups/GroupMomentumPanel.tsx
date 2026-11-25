@@ -1,12 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Textarea } from "@/components/ui/Input";
 import clsx from "clsx";
-import { BellRing, Flame, Medal, Timer, Trophy, Users } from "lucide-react";
+import { BellRing, Check, Flame, Medal, Timer, Trophy, Users } from "lucide-react";
 import toast from "react-hot-toast";
 import Card, { CardHeader } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
+import ModalFooter from "@/components/ui/ModalFooter";
 import ProgressBar, { ProgressRing } from "@/components/ui/ProgressBar";
 import { Heatmap, HeatLegend, WeekHeatmap } from "@/components/ui/Heatmap";
 import NotesInbox from "@/components/groups/NotesInbox";
@@ -94,7 +96,7 @@ function MemberCard({
   const nudged = member.sentToday.includes("nudge");
 
   return (
-    <li className="flex flex-col gap-3 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4">
+    <li className="flex flex-col gap-3 rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
       <div className="flex items-start gap-3">
         <div className="relative shrink-0">
           <div className={clsx("flex h-11 w-11 items-center justify-center rounded-xl text-sm font-bold", avatarTone(member.name))}>
@@ -122,11 +124,26 @@ function MemberCard({
             </>
           )}
         </div>
-        {member.studyStreak > 0 && (
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-orange-500/15 px-2 py-0.5 text-[11px] font-semibold text-orange-600">
-            <Flame className="h-3 w-3" aria-hidden /> {member.studyStreak}
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          {member.studyStreak > 0 && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full bg-orange-500/15 px-2 py-0.5 text-[11px] font-semibold text-orange-600"
+              title={`${member.studyStreak}-day streak`}
+            >
+              <Flame className="h-3 w-3" aria-hidden /> {member.studyStreak}
+            </span>
+          )}
+          <span
+            className={clsx(
+              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold",
+              member.goalMetToday ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" : "bg-[var(--surface-muted)] text-[var(--muted)]"
+            )}
+            title={member.goalMetToday ? "Daily goal reached" : "Questions solved today / daily goal"}
+          >
+            {member.goalMetToday && <Check className="h-3 w-3" aria-hidden />}
+            Today {member.solvedToday}/{member.dailyGoal}
           </span>
-        )}
+        </div>
       </div>
 
       <div>
@@ -150,10 +167,16 @@ function MemberCard({
         <ProgressBar value={member.donePercent} size="sm" />
       </div>
 
-      {member.behindReasons.length > 0 && (
+      {member.behindReasons.length > 0 ? (
         <p className="rounded-lg bg-amber-500/10 px-2.5 py-1.5 text-[11px] text-amber-700 dark:text-amber-300">
           {member.behindReasons.join(" · ")}
         </p>
+      ) : (
+        member.quiet && (
+          <p className="rounded-lg bg-brand/10 px-2.5 py-1.5 text-[11px] text-brand">
+            Quiet for a few days. A cheer could help them get back to it.
+          </p>
+        )
       )}
 
       <div className="mt-auto flex flex-wrap items-center gap-2 border-t border-[var(--border)] pt-3">
@@ -180,7 +203,7 @@ function MemberCard({
                 ))}
               </div>
             )}
-            {isAdmin && member.behindReasons.length > 0 && (
+            {isAdmin && (
               <Button
                 size="sm"
                 variant="outline"
@@ -310,6 +333,7 @@ export default function GroupMomentumPanel({ groupId }: { groupId: string }) {
               <ProgressRing value={goalPct} size={92} />
               <p className="mt-1 text-[11px] text-[var(--muted)]">
                 Weekly goal · {team.doneWeek}/{team.goal}
+                <span className="block">{team.goalPerMember} per member</span>
               </p>
             </div>
           </div>
@@ -317,6 +341,31 @@ export default function GroupMomentumPanel({ groupId }: { groupId: string }) {
       </Card>
 
       <NotesInbox groupId={groupId} compact />
+
+      {data.feed.length > 0 && (
+        <Card>
+          <CardHeader title="Recent activity" subtitle="The latest questions solved in the group" />
+          <ul className="mt-3 divide-y divide-[var(--border)]">
+            {data.feed.map((f, i) => (
+              <li key={`${f.userId}-${f.at}-${i}`} className="flex items-start gap-3 py-2.5 text-sm">
+                <span
+                  className={clsx("flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold", avatarTone(f.name))}
+                  aria-hidden
+                >
+                  {initials(f.name)}
+                </span>
+                <p className="min-w-0 flex-1">
+                  <span className="font-medium">{f.name}</span> solved{" "}
+                  <span className="text-[var(--foreground)]">{f.title}</span>
+                </p>
+                <time dateTime={f.at} className="shrink-0 text-xs text-[var(--muted)]">
+                  {timeAgo(f.at)}
+                </time>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
@@ -420,24 +469,21 @@ export default function GroupMomentumPanel({ groupId }: { groupId: string }) {
           </div>
           <label className="block text-xs font-medium text-[var(--muted)]">
             Or write your own
-            <textarea
+            <Textarea
               value={nudgeText}
               onChange={(e) => setNudgeText(e.target.value.slice(0, NOTE_MAX_LENGTH))}
               rows={3}
-              className="input mt-1 !text-sm"
+              className="mt-1 !text-sm"
             />
             <span className="mt-0.5 block text-right text-[10px]">
               {nudgeText.length}/{NOTE_MAX_LENGTH}
             </span>
           </label>
-          <div className="flex justify-end gap-2 border-t border-[var(--border)] pt-4">
-            <Button type="button" variant="ghost" size="sm" onClick={() => setNudgeTarget(null)} disabled={sending}>
-              Cancel
-            </Button>
-            <Button type="submit" size="sm" loading={sending} disabled={!nudgeText.trim()}>
+          <ModalFooter className="!mt-4" onCancel={() => setNudgeTarget(null)} cancelDisabled={sending}>
+            <Button type="submit" loading={sending} disabled={!nudgeText.trim()}>
               {sending ? "Sending…" : "Send nudge"}
             </Button>
-          </div>
+          </ModalFooter>
         </form>
       </Modal>
     </section>

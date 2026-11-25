@@ -67,8 +67,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
     const countdown = getInterviewCountdown(groupDoc.interviewDate);
 
+    const serialized: Record<string, unknown> = { ...serializeDoc(groupDoc) };
+    if (!canManageGroup(isGroupMember(groupDoc, userId))) {
+      delete serialized.joinCode;
+      delete serialized.joinCodeExpiresAt;
+    }
+
     return jsonOk({
-      ...serializeDoc(groupDoc),
+      ...serialized,
       topicCount,
       memberStats,
       gamification,
@@ -91,7 +97,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     await connectToDatabase();
     const { id } = await params;
     const body = await request.json();
-    const { name, description, interviewDate } = body;
+    const { name, description, interviewDate, weeklyGoalPerMember } = body;
 
     const group = await Group.findById(id);
     if (!group) return jsonError("Group not found", 404);
@@ -99,9 +105,34 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const role = isGroupMember(group, userId);
     if (!canManageGroup(role)) return jsonError("Unauthorized", 403);
 
-    if (name) group.name = name.trim();
-    if (description !== undefined) group.description = description?.trim();
-    if (interviewDate) group.interviewDate = new Date(interviewDate);
+    if (name !== undefined) {
+      if (typeof name !== "string" || !name.trim() || name.trim().length > 80) {
+        return jsonError("Group name must be 1-80 characters");
+      }
+      group.name = name.trim();
+    }
+    if (description !== undefined) {
+      if (description !== null && (typeof description !== "string" || description.length > 300)) {
+        return jsonError("Description must be under 300 characters");
+      }
+      group.description = description?.trim() || undefined;
+    }
+    if (interviewDate !== undefined) {
+      if (interviewDate === null || interviewDate === "") {
+        group.interviewDate = undefined; // clearing the date is allowed
+      } else {
+        const parsed = new Date(interviewDate);
+        if (Number.isNaN(parsed.getTime())) return jsonError("Invalid interview date");
+        group.interviewDate = parsed;
+      }
+    }
+    if (weeklyGoalPerMember !== undefined) {
+      const goal = Number(weeklyGoalPerMember);
+      if (!Number.isInteger(goal) || goal < 1 || goal > 100) {
+        return jsonError("Weekly goal must be a whole number from 1 to 100");
+      }
+      group.weeklyGoalPerMember = goal;
+    }
     await group.save();
     invalidateGroupInsights(id);
 

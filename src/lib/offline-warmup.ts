@@ -1,5 +1,4 @@
 import { apiGet } from "@/lib/api";
-import { TABLE_PAGE_SIZE } from "@/lib/utils";
 
 /**
  * Background pre-fetch so the screens people open most work offline without a prior visit.
@@ -40,8 +39,6 @@ export async function warmOfflineData(userId: string, activeGroupId?: string): P
   if (activeGroupId) {
     const g = activeGroupId;
     await quiet("/api/dashboard");
-    await quiet(`/api/tasks?groupId=${g}&bucket=active&page=1&limit=${TABLE_PAGE_SIZE}`);
-    await quiet(`/api/tasks?groupId=${g}&bucket=completed&page=1&limit=${TABLE_PAGE_SIZE}`);
     await quiet(`/api/subjects?groupId=${g}&scope=group&includeInactive=1`);
     await quiet(`/api/subjects?scope=personal&includeInactive=1`);
     await quiet(`/api/subjects?groupId=${g}&minimal=1`);

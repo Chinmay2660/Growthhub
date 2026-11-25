@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Input, Textarea } from "@/components/ui/Input";
 import Link from "next/link";
 import clsx from "clsx";
 import MockDateModal from "@/components/groups/MockDateModal";
@@ -10,6 +11,8 @@ import { apiGet, apiPatch, apiPost, getErrorMessage } from "@/lib/api";
 import Card, { CardHeader } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
+import ModalFooter from "@/components/ui/ModalFooter";
+import FormField from "@/components/ui/FormField";
 import Chip from "@/components/ui/Chip";
 import ProgressBar, { ProgressRing } from "@/components/ui/ProgressBar";
 import { MockInterviewsSkeleton, ErrorState } from "@/components/ui/StateViews";
@@ -100,7 +103,9 @@ export default function GroupMockInterviewsTab({
   const [selectedId, setSelectedId] = useState("");
   const [generating, setGenerating] = useState(false);
   const [showLogModal, setShowLogModal] = useState(false);
-  const [mockScore, setMockScore] = useState(70);
+  const [mockScoreText, setMockScoreText] = useState("70");
+  const mockScoreValue = mockScoreText.trim() === "" ? NaN : Number(mockScoreText);
+  const mockScoreValid = Number.isInteger(mockScoreValue) && mockScoreValue >= 0 && mockScoreValue <= 100;
   const [mockWeaknesses, setMockWeaknesses] = useState("");
   const [mockFeedback, setMockFeedback] = useState("");
   const [rubric, setRubric] = useState({ communication: 3, correctness: 3, depth: 3, confidence: 3 });
@@ -209,7 +214,19 @@ export default function GroupMockInterviewsTab({
     }
   };
 
+  const [nextRoundMode, setNextRoundMode] = useState(false);
+  // "Now" is read once when the page opens: render must stay pure, and a stale minute is harmless here.
+  const [openedAt] = useState(() => Date.now());
+  const roundHasPassed = activeRound?.interviewDate ? new Date(activeRound.interviewDate).getTime() < openedAt : false;
+
+  const openNextRoundModal = () => {
+    setMockDate("");
+    setNextRoundMode(true);
+    setShowScheduleModal(true);
+  };
+
   const openScheduleModal = () => {
+    setNextRoundMode(false);
     setMockDate(
       activeRound?.interviewDate ? toDateTimeLocalValue(activeRound.interviewDate) : ""
     );
@@ -220,6 +237,18 @@ export default function GroupMockInterviewsTab({
     if (!schedule || !mockDate) return;
     setSavingMockDate(true);
     try {
+      if (nextRoundMode) {
+        const created = await apiPatch<{ roundId: string; roundNumber: number }>("/api/mock-interviews/schedule", {
+          action: "startNextRound",
+          groupId,
+          scheduledAt: parseAppDateTime(mockDate).toISOString(),
+        });
+        toast.success(`Round ${created.roundNumber} scheduled`);
+        setShowScheduleModal(false);
+        setNextRoundMode(false);
+        await load(created.roundId);
+        return;
+      }
       const data = await apiPatch<{ scheduledAt: string }>("/api/mock-interviews/schedule", {
         action: "setMockDate",
         groupId,
@@ -238,14 +267,14 @@ export default function GroupMockInterviewsTab({
   };
 
   const submitMockScore = async () => {
-    if (!currentUserId || !selected?.session) return;
+    if (!currentUserId || !selected?.session || !mockScoreValid) return;
     setSubmittingScore(true);
     try {
       await apiPost("/api/mock-interviews", {
         sessionId: selected.session._id,
         intervieweeId: selectedId,
         groupId,
-        score: mockScore,
+        score: mockScoreValue,
         weaknesses: mockWeaknesses.split(",").map((s) => s.trim()).filter(Boolean),
         strengths: [],
         feedback: mockFeedback.trim() || undefined,
@@ -256,7 +285,7 @@ export default function GroupMockInterviewsTab({
       setMockWeaknesses("");
       setMockFeedback("");
       setRubric({ communication: 3, correctness: 3, depth: 3, confidence: 3 });
-      setMockScore(70);
+      setMockScoreText("70");
       await load(schedule?.activeRoundId);
     } catch (err) {
       toast.error(getErrorMessage(err, "Failed to submit score"));
@@ -312,10 +341,10 @@ export default function GroupMockInterviewsTab({
         ) : (
           <>
             <div
-              className="mb-5 rounded-2xl border border-[var(--border)] p-4 sm:p-5"
+              className="mb-5 rounded-xl border border-[var(--border)] p-4 sm:p-5"
               style={{
                 background:
-                  "linear-gradient(135deg, color-mix(in srgb, var(--brand) 8%, var(--card)) 0%, var(--card) 55%)",
+                  "linear-gradient(135deg, color-mix(in srgb, var(--accent) 8%, var(--card)) 0%, var(--card) 55%)",
               }}
             >
               <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
@@ -339,9 +368,16 @@ export default function GroupMockInterviewsTab({
                 </div>
 
                 {viewMode === "schedule" && canManage && (
-                  <Button size="sm" variant="outline" onClick={openScheduleModal}>
-                    {currentRoundHasDate ? "Edit group mock date" : "Set group mock date"}
-                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" onClick={openScheduleModal}>
+                      {currentRoundHasDate ? "Edit group mock date" : "Set group mock date"}
+                    </Button>
+                    {isMockToday || roundHasPassed ? (
+                      <Button size="sm" onClick={openNextRoundModal}>
+                        Start next round
+                      </Button>
+                    ) : null}
+                  </div>
                 )}
               </div>
 
@@ -374,14 +410,15 @@ export default function GroupMockInterviewsTab({
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[28rem] text-sm">
+                  <caption className="sr-only">Team roster mock interview progress</caption>
                   <thead>
                     <tr className="text-left text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-                      <th className="px-3 py-2.5">Member</th>
-                      <th className="px-3 py-2.5">Done</th>
-                      <th className="px-3 py-2.5">Status</th>
-                      <th className="hidden px-3 py-2.5 md:table-cell">Mock Qs</th>
-                      <th className="hidden px-3 py-2.5 sm:table-cell">Scores</th>
-                      <th className="px-3 py-2.5 text-right">Avg</th>
+                      <th scope="col" className="px-3 py-2.5">Member</th>
+                      <th scope="col" className="px-3 py-2.5">Done</th>
+                      <th scope="col" className="px-3 py-2.5">Status</th>
+                      <th scope="col" className="hidden px-3 py-2.5 md:table-cell">Mock Qs</th>
+                      <th scope="col" className="hidden px-3 py-2.5 sm:table-cell">Scores</th>
+                      <th scope="col" className="px-3 py-2.5 text-right">Avg</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -391,14 +428,28 @@ export default function GroupMockInterviewsTab({
                         <tr
                           key={member.userId}
                           className={clsx(
-                            "cursor-pointer border-t border-[var(--border)] transition-colors",
+                            "cursor-pointer border-t border-[var(--border)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand/50",
                             isSelected
-                              ? "bg-brand/8"
+                              ? "bg-brand/10"
                               : "hover:bg-[var(--surface-muted)]/60"
                           )}
+                          aria-selected={isSelected}
+                          tabIndex={0}
                           onClick={() => setSelectedId(member.userId)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              setSelectedId(member.userId);
+                            }
+                          }}
                         >
-                          <td className="px-3 py-3">
+                          <td
+                            className={clsx(
+                              "px-3 py-3",
+                              // accent bar on the open member's row, so it's clear whose details are shown
+                              isSelected && "shadow-[inset_3px_0_0_0_var(--accent)]"
+                            )}
+                          >
                             <div className="flex items-center gap-2.5">
                               <span
                                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand/15 text-xs font-bold text-brand"
@@ -456,7 +507,15 @@ export default function GroupMockInterviewsTab({
                       {memberInitials(selected.name)}
                     </span>
                     <div className="min-w-0">
-                      <p className="font-semibold text-[var(--foreground)]">{selected.name}</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-semibold text-[var(--foreground)]">
+                          {selected.name}
+                          {selected.userId === currentUserId ? " (you)" : ""}
+                        </p>
+                        <Chip variant="brand" className="!text-[10px]">
+                          Viewing
+                        </Chip>
+                      </div>
                       <p className="mt-0.5 text-xs text-[var(--muted)]">
                         {selected.session
                           ? `Generated ${formatDate(selected.session.createdAt)}`
@@ -547,6 +606,11 @@ export default function GroupMockInterviewsTab({
                                         Conf {submitted.rubric.confidence}
                                       </span>
                                     )}
+                                    {submitted?.weaknesses && submitted.weaknesses.length > 0 && (
+                                      <span className="block text-[10px] text-[var(--muted)]">
+                                        Work on: {submitted.weaknesses.join(", ")}
+                                      </span>
+                                    )}
                                     {submitted?.feedback && (
                                       <span className="block text-[10px] text-[var(--muted)]">
                                         “{submitted.feedback}”
@@ -601,7 +665,11 @@ export default function GroupMockInterviewsTab({
         )}
       </Card>
 
-      <RubricTrendChart groupId={groupId} />
+      <RubricTrendChart
+        groupId={groupId}
+        userId={selected?.userId ?? currentUserId ?? undefined}
+        name={selected && selected.userId !== currentUserId ? selected.name : undefined}
+      />
 
       <MockDateModal
         open={showScheduleModal}
@@ -610,6 +678,7 @@ export default function GroupMockInterviewsTab({
         onChange={setMockDate}
         onSave={() => void saveMockDate()}
         saving={savingMockDate}
+        title={nextRoundMode ? "Schedule next round" : "Schedule group mock"}
       />
 
       <Modal
@@ -622,30 +691,48 @@ export default function GroupMockInterviewsTab({
           <p className="text-xs text-[var(--muted)]">
             Score {selected?.name}&apos;s mock. One score per member.
           </p>
-          <div>
-            <label className="text-xs font-medium">Score (0-100)</label>
-            <input
+          <FormField label="Score (0-100)">
+            <Input
               type="number"
               min={0}
               max={100}
-              value={mockScore}
-              onChange={(e) => setMockScore(Number(e.target.value))}
-              onWheel={(e) => e.currentTarget.blur()}
-              className="input mt-1 max-w-[8rem] !py-1.5 !text-sm"
+              value={mockScoreText}
+              onChange={(e) => setMockScoreText(e.target.value)}
+              aria-invalid={!mockScoreValid}
+              className="max-w-[8rem] !py-1.5 !text-sm"
             />
-          </div>
+          </FormField>
           <div className="space-y-2">
             <p className="text-xs font-medium">Rubric (1 = poor, 5 = excellent)</p>
             {(["communication", "correctness", "depth", "confidence"] as const).map((key) => (
               <div key={key} className="flex items-center justify-between gap-3">
                 <span className="text-xs capitalize">{key}</span>
-                <div className="flex gap-1" role="radiogroup" aria-label={key}>
+                <div
+                  className="flex gap-1"
+                  role="radiogroup"
+                  aria-label={`${key[0].toUpperCase()}${key.slice(1)} (1 poor, 5 excellent)`}
+                >
                   {[1, 2, 3, 4, 5].map((n) => (
                     <button
                       key={n}
                       type="button"
                       role="radio"
                       aria-checked={rubric[key] === n}
+                      tabIndex={rubric[key] === n || (!rubric[key] && n === 1) ? 0 : -1}
+                      onKeyDown={(e) => {
+                        const delta =
+                          e.key === "ArrowRight" || e.key === "ArrowDown"
+                            ? 1
+                            : e.key === "ArrowLeft" || e.key === "ArrowUp"
+                              ? -1
+                              : 0;
+                        if (!delta) return;
+                        e.preventDefault();
+                        const next = Math.min(5, Math.max(1, n + delta));
+                        setRubric((r) => ({ ...r, [key]: next }));
+                        const radios = e.currentTarget.parentElement?.querySelectorAll<HTMLElement>('[role="radio"]');
+                        radios?.[next - 1]?.focus();
+                      }}
                       onClick={() => setRubric((r) => ({ ...r, [key]: n }))}
                       className={clsx(
                         "h-7 w-7 rounded-md border text-xs font-semibold transition-colors",
@@ -661,31 +748,29 @@ export default function GroupMockInterviewsTab({
               </div>
             ))}
           </div>
-          <div>
-            <label className="text-xs font-medium">Feedback notes</label>
-            <textarea
+          <FormField label="Feedback notes">
+            <Textarea
               value={mockFeedback}
               onChange={(e) => setMockFeedback(e.target.value)}
               rows={3}
               placeholder="What went well, what to improve…"
-              className="input mt-1 !py-1.5 !text-sm"
+              className="!py-1.5 !text-sm"
             />
-          </div>
-          <div>
-            <label className="text-xs font-medium">Weak areas (comma separated)</label>
-            <input
+          </FormField>
+          <FormField label="Weak areas (comma separated)">
+            <Input
               type="text"
               value={mockWeaknesses}
               onChange={(e) => setMockWeaknesses(e.target.value)}
               placeholder="Multithreading, SQL joins"
-              className="input mt-1 !py-1.5 !text-sm"
+              className="!py-1.5 !text-sm"
             />
-          </div>
-          <div className="flex justify-end">
-            <Button size="sm" onClick={submitMockScore} loading={submittingScore}>
+          </FormField>
+          <ModalFooter className="!mt-4" onCancel={() => setShowLogModal(false)} cancelDisabled={submittingScore}>
+            <Button onClick={submitMockScore} loading={submittingScore} disabled={!mockScoreValid}>
               {submittingScore ? "Submitting…" : "Submit score"}
             </Button>
-          </div>
+          </ModalFooter>
         </div>
       </Modal>
     </div>

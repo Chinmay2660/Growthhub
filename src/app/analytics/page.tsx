@@ -1,10 +1,10 @@
 "use client";
 
+import { useDocumentTitle } from "@/lib/use-document-title";
 import { useEffect, useState, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { useUser } from "@/components/providers/UserProvider";
 import { apiGet } from "@/lib/api";
-import Link from "next/link";
 import Button from "@/components/ui/Button";
 import { AnalyticsPageSkeleton, ErrorState, EmptyState } from "@/components/ui/StateViews";
 import MasteryHeatmap from "@/components/analytics/MasteryHeatmap";
@@ -21,6 +21,7 @@ const AnalyticsCharts = dynamic(
 
 export default function AnalyticsPage() {
   const { user } = useUser();
+  useDocumentTitle("Analytics");
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -58,15 +59,13 @@ export default function AnalyticsPage() {
         title="No active group"
         description="Analytics are available once you join or create a prep group."
         action={
-          <Link href="/groups">
-            <Button>Browse Groups</Button>
-          </Link>
+          <Button href="/groups">Browse Groups</Button>
         }
       />
     );
   }
 
-  if (loading) return <AnalyticsPageSkeleton />;
+  if (loading || !user) return <AnalyticsPageSkeleton />;
   if (error) return <ErrorState message={error} onRetry={load} />;
   if (!data) return null;
 

@@ -2,6 +2,8 @@ import { connectToDatabase } from "@/lib/mongodb";
 import { requireAuthUserId, unauthorized } from "@/lib/api-auth";
 import { jsonOk, jsonError } from "@/lib/utils";
 import { serializeDoc } from "@/lib/services";
+import { canManageGroup } from "@/lib/group-roles";
+import { getGroupRole, isObjectId } from "@/lib/access";
 import Topic from "@/models/Topic";
 import TopicProgress from "@/models/TopicProgress";
 import Subject from "@/models/Subject";
@@ -15,6 +17,12 @@ export async function GET(request: Request) {
     const groupId = searchParams.get("groupId");
     const subjectId = searchParams.get("subjectId");
     const scope = searchParams.get("scope") as ContentScope | "all" | null;
+    if ((groupId && !isObjectId(groupId)) || (subjectId && !isObjectId(subjectId))) {
+      return jsonError("Invalid id");
+    }
+    if (groupId && (await getGroupRole(groupId, userId)) === null) {
+      return jsonError("You are not a member of that group", 403);
+    }
 
     const subjectFilter: Record<string, unknown>[] = [];
     if (groupId && (!scope || scope === "all" || scope === "group")) {
@@ -65,17 +73,24 @@ export async function POST(request: Request) {
     await connectToDatabase();
     const body = await request.json();
     const { subjectId, groupId, name, priority } = body;
-    if (!subjectId || !groupId || !name?.trim()) {
+    if (!isObjectId(subjectId) || !isObjectId(groupId) || typeof name !== "string" || !name.trim()) {
       return jsonError("subjectId, groupId, and name are required");
     }
+    if (name.length > 120) return jsonError("Name is too long");
+    if (priority !== undefined && !["critical", "high", "medium", "low"].includes(priority)) {
+      return jsonError("Invalid priority");
+    }
+    const role = await getGroupRole(groupId, userId);
+    if (role === null) return jsonError("You are not a member of that group", 403);
 
     const subject = await Subject.findById(subjectId).lean();
     if (!subject) return jsonError("Subject not found", 404);
     if (subject.scope === "personal" && String(subject.userId) !== userId) {
       return jsonError("Subject does not belong to you", 403);
     }
-    if (subject.scope === "group" && String(subject.groupId) !== groupId) {
-      return jsonError("Subject does not belong to this group", 403);
+    if (subject.scope === "group") {
+      if (String(subject.groupId) !== groupId) return jsonError("Subject does not belong to this group", 403);
+      if (!canManageGroup(role)) return jsonError("Only a group admin can add topics to a shared track", 403);
     }
 
     const count = await Topic.countDocuments({ subjectId });

@@ -37,13 +37,3 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<H
     );
   }
 );
-
-export const Select = forwardRef<HTMLSelectElement, React.SelectHTMLAttributes<HTMLSelectElement>>(
-  function Select({ className, children, ...props }, ref) {
-    return (
-      <select ref={ref} className={clsx("input", className)} {...props}>
-        {children}
-      </select>
-    );
-  }
-);

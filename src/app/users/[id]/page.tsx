@@ -1,5 +1,6 @@
 "use client";
 
+import { useDocumentTitle } from "@/lib/use-document-title";
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
@@ -81,6 +82,7 @@ export default function UserProfilePage() {
   const params = useParams();
   const userId = params.id as string;
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  useDocumentTitle(profile?.name);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -112,7 +114,6 @@ export default function UserProfilePage() {
   if (!profile) return null;
 
   const { stats, subjects = [], mock, interview, target } = profile;
-  const taskPercent = profile.tasksTotal ? Math.round((profile.tasksCompleted / profile.tasksTotal) * 100) : 0;
   const roleLabel = profile.role ? profile.role.replace(/[-_]/g, " ") : null;
 
   return (
@@ -160,11 +161,9 @@ export default function UserProfilePage() {
           </div>
           <div className="flex items-center justify-between gap-4 sm:flex-col sm:items-end">
             {profile.isSelf && (
-              <Link href="/settings">
-                <Button variant="outline" size="sm">
-                  <Settings className="h-3.5 w-3.5" aria-hidden /> Settings
-                </Button>
-              </Link>
+              <Button href="/settings" variant="outline" size="sm">
+                <Settings className="h-3.5 w-3.5" aria-hidden /> Settings
+              </Button>
             )}
           </div>
         </div>
@@ -194,16 +193,11 @@ export default function UserProfilePage() {
           value={stats ? `${stats.questionsDone}/${stats.questionsTotal}` : "–"}
           hint={stats ? `${stats.doneLast7Days} in the last 7 days` : undefined}
         />
-        <Stat label="Points" value={stats?.points ?? 0} hint="From group questions" />
+        <Stat label="Questions solved" value={stats?.points ?? 0} hint="In the group" />
         <Stat
           label="Study time"
           value={stats ? hours(stats.studyMinutesWeek) : "–"}
           hint={stats ? `${hours(stats.studyMinutesTotal)} total` : undefined}
-        />
-        <Stat
-          label="Tasks done"
-          value={`${profile.tasksCompleted}/${profile.tasksTotal}`}
-          hint={profile.tasksTotal ? `${taskPercent}% complete` : "No tasks yet"}
         />
         <Stat label="Streak" value={`${profile.studyStreak} day${profile.studyStreak === 1 ? "" : "s"}`} />
         <Stat label="Daily goal" value={hours(profile.dailyStudyMinutes)} hint="Study time target" />
@@ -228,9 +222,9 @@ export default function UserProfilePage() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
-          <CardHeader title="Subject mastery" subtitle="Completed questions weighted by confidence" />
+          <CardHeader title="Track mastery" subtitle="Completed questions weighted by confidence" />
           {subjects.length === 0 ? (
-            <p className="text-sm text-[var(--muted)]">No subjects with questions yet.</p>
+            <p className="text-sm text-[var(--muted)]">No tracks with questions yet.</p>
           ) : (
             <ul className="space-y-3">
               {subjects.map((s) => (
